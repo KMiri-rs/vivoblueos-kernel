@@ -52,6 +52,7 @@ run_clippy("blueos_infra_clippy") {
 
 miri_test("infra_miri_test") {
   crate = "src/lib.rs"
+  deps = [ ":blueos_infra" ]
 
   # test_name = "test_basic"   # optional
   extra_miri_flags = [
