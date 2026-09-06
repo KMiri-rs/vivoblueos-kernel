@@ -506,7 +506,7 @@ pub(crate) extern "C" fn current_cpu_id() -> usize {
     id
 }
 
-#[naked]
+#[unsafe(naked)]
 pub(crate) extern "C" fn switch_stack(
     to_sp: usize,
     cont: extern "C" fn(sp: usize, old_sp: usize),

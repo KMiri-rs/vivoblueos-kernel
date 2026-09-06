@@ -22,15 +22,11 @@
 #![feature(c_size_t)]
 #![feature(const_trait_impl)]
 #![feature(core_intrinsics)]
-#![feature(let_chains)]
 #![feature(linkage)]
 #![feature(negative_impls)]
-#![feature(non_null_from_ref)]
 #![feature(pointer_is_aligned_to)]
 #![feature(ptr_as_uninit)]
-#![feature(slice_as_chunks)]
 #![feature(slice_ptr_get)]
-#![feature(strict_provenance_atomic_ptr)]
 
 pub mod intrusive;
 pub mod lifetime;

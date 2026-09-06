@@ -74,7 +74,7 @@ fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
 }
 
 #[no_mangle]
-#[repr(align(8))]
+#[rustc_align(8)]
 pub extern "C" fn _start() {
     // FIXME: Generally we need toolchains able to build static-pie,
     // thus we have dynamic relocation entres to relocate .got
