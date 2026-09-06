@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![no_std]
-#![feature(naked_functions)]
 
 #[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
 pub mod riscv;

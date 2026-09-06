@@ -14,8 +14,7 @@
 
 use core::marker::PhantomData;
 
-#[const_trait]
-pub trait Adapter<T> {
+pub const trait Adapter<T> {
     fn offset() -> usize;
 }
 

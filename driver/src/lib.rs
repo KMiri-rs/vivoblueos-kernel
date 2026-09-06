@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![no_std]
-#![feature(const_nonnull_new)]
 
 pub mod clock_control;
 pub mod gpio;

@@ -400,7 +400,7 @@ create_thread(spawn_args_ptr: *const SpawnArgs) -> c_long {
     // referenced by the global queue. When this thread is retired,
     // it's removed from the global queue.
     debug_assert_eq!(ok, Ok(()));
-    unsafe {core::mem::transmute(handle)}
+    handle as _
 });
 
 define_syscall_handler!(

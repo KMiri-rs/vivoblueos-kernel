@@ -18,10 +18,8 @@
 #![allow(clippy::crate_in_macro_def)]
 #![allow(clippy::drop_non_drop)]
 #![feature(alloc_error_handler)]
-#![feature(alloc_layout_extra)]
 #![feature(allocator_api)]
 #![feature(associated_type_defaults)]
-#![feature(async_closure)]
 #![feature(box_as_ptr)]
 #![feature(c_size_t)]
 #![feature(c_variadic)]
@@ -29,21 +27,13 @@
 #![feature(core_intrinsics)]
 #![feature(coverage_attribute)]
 #![feature(fn_align)]
-#![feature(generic_arg_infer)]
 #![feature(inherent_associated_types)]
-#![feature(lazy_get)]
-#![feature(let_chains)]
 #![feature(link_llvm_intrinsics)]
 #![feature(linkage)]
 #![feature(macro_metavar_expr)]
 #![feature(map_try_insert)]
-#![feature(naked_functions)]
 #![feature(negative_impls)]
-#![feature(new_zeroed_alloc)]
-#![feature(non_null_from_ref)]
-#![feature(noop_waker)]
 #![feature(pointer_is_aligned_to)]
-#![feature(trait_upcasting)]
 #![feature(trivial_bounds)]
 // Attributes applied when we're testing the kernel.
 #![cfg_attr(test, no_main)]
@@ -331,7 +321,7 @@ mod tests {
         static ARRIVED: AtomicUsize = AtomicUsize::new(0);
 
         let arrived = ARRIVED.fetch_add(1, Ordering::AcqRel) + 1;
-        let target = if arrived % 2 == 0 {
+        let target = if arrived.is_multiple_of(2) {
             arrived
         } else {
             arrived + 1

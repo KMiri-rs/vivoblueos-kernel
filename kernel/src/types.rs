@@ -72,8 +72,7 @@ macro_rules! static_arc {
     };
 }
 
-#[const_trait]
-pub(crate) trait StaticListOwner<T, A: IntrusiveAdapter<T>> {
+pub(crate) const trait StaticListOwner<T, A: IntrusiveAdapter<T>> {
     type List = ArcList<T, A>;
     fn get() -> &'static Arc<SpinLock<AtomicIlistHead<T, A>>>;
 }

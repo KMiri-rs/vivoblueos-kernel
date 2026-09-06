@@ -48,7 +48,7 @@ pub(crate) static mut INIT_VFS_DONE: bool = false;
 
 // See https://github.com/rust-lang/rust/pull/134213 for more details about naked function.
 #[no_mangle]
-#[naked]
+#[unsafe(naked)]
 pub unsafe extern "C" fn _start() {
     // Arch is responsible to init cores. After initializing
     // cores, arch_bootstrap should continue with `init`.

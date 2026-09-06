@@ -84,13 +84,11 @@ macro_rules! arch_bootstrap {
             "la gp, __global_pointer$",
             "la sp, {stack_end}",
             "csrr t0, mhartid",
-            "li t1, {stack_size}",
-            "mul t0, t0, t1",
+            "slli t0, t0, 12",
             "sub sp, sp, t0",
             "call {bootstrap}",
             "la t0, {cont}",
             "jalr x0, t0, 0",
-            stack_size = const 0x1000,
             stack_end = sym $stack_end,
             bootstrap = sym $crate::arch::riscv::bootstrap,
             cont = sym $cont,
@@ -527,7 +525,7 @@ pub(crate) extern "C" fn current_cpu_id() -> usize {
     id
 }
 
-#[naked]
+#[unsafe(naked)]
 pub(crate) extern "C" fn switch_stack(
     to_sp: usize,
     cont: extern "C" fn(sp: usize, old_sp: usize),

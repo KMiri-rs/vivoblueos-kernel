@@ -47,10 +47,10 @@ fn handle_expiration(tm: &mut Timer) {
     match &mut tm.mode {
         TimerMode::Repeat(r) => {
             r.elapsed_times += 1;
-            if let Some(total) = r.total_times
-                && r.elapsed_times >= total
-            {
-                tm.expire();
+            if let Some(total) = r.total_times {
+                if r.elapsed_times >= total {
+                    tm.expire();
+                }
             }
         }
         _ => tm.expire(),
@@ -94,10 +94,7 @@ impl TimerManager {
 
     pub fn expire(&mut self, deadline: Tick) -> usize {
         let mut expired = 0;
-        loop {
-            let Some(tm) = self.timers.peek() else {
-                break;
-            };
+        while let Some(tm) = self.timers.peek() {
             let next_deadline = compute_next_deadline(tm);
             if next_deadline > deadline {
                 break;
