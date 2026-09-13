@@ -47,7 +47,7 @@ impl<T, A: const Adapter<T>> IouMinHeapNodeMut<'_, T, A> {
 #[derive(Default, Debug)]
 struct Link<T, A: const Adapter<T>>(PhantomData<(T, A)>);
 
-impl<T, A: const Adapter<T>> const Adapter<MinHeapNode<T, A>> for Link<T, A> {
+const impl<T, A: const Adapter<T>> Adapter<MinHeapNode<T, A>> for Link<T, A> {
     fn offset() -> usize {
         core::mem::offset_of!(MinHeapNode<T, A>, link)
     }
