@@ -47,7 +47,7 @@ impl BoxedRingBuffer {
 
     /// Create a new ring buffer with the given size and given mem
     pub fn new_with_mem(size: usize, buf: *mut u8) -> Self {
-        let mut buf = unsafe { Storage::from_raw(buf, size) };
+        let buf = unsafe { Storage::from_raw(buf, size) };
         Self {
             inner: unsafe { RingBuffer::new_with_buffer(buf.base(), buf.size()) },
             _box: buf, // hold the buffer to prevent it from being freed
@@ -186,6 +186,7 @@ impl RingBuffer {
     /// # Safety
     ///
     /// Only one reader can exist at a time.
+    #[allow(dead_code)]
     pub unsafe fn try_reader(&self) -> Option<Reader<'_>> {
         if self.buf.load(Ordering::Relaxed).is_null() {
             return None;
@@ -208,6 +209,7 @@ impl RingBuffer {
     /// # Safety
     ///
     /// Only one writer can exist at a time.
+    #[allow(dead_code)]
     pub unsafe fn try_writer(&self) -> Option<Writer<'_>> {
         if self.buf.load(Ordering::Relaxed).is_null() {
             return None;
@@ -216,6 +218,7 @@ impl RingBuffer {
     }
 
     /// Return if buffer is available.
+    #[allow(dead_code)]
     pub fn is_available(&self) -> bool {
         !self.buf.load(Ordering::Relaxed).is_null() && self.len.load(Ordering::Relaxed) != 0
     }
@@ -863,7 +866,7 @@ mod tests {
             assert_eq!(0, ps[1].len());
 
             let mut w = rb.writer();
-            let ps = w.push(|buf| {
+            let _ps = w.push(|buf| {
                 buf[0] = 4;
                 1
             });
@@ -871,7 +874,7 @@ mod tests {
             r.pop_done(1);
 
             let mut w = rb.writer();
-            let ps = w.push(|buf| {
+            let _ps = w.push(|buf| {
                 buf[0] = 4;
                 1
             });
