@@ -23,7 +23,7 @@ macro_rules! impl_simple_intrusive_adapter {
     ($name:ident, $ty:ty, $($fields:expr)+) => {
         #[derive(Default, Debug)]
         pub struct $name;
-        impl const $crate::intrusive::Adapter<$ty> for $name {
+        const impl $crate::intrusive::Adapter<$ty> for $name {
             fn offset() -> usize {
                 core::mem::offset_of!($ty, $($fields)+)
             }
@@ -41,7 +41,7 @@ pub struct Relative<T, From: const Adapter<T>, To: const Adapter<T>, S>(
     PhantomData<S>,
 );
 
-impl<T, From: const Adapter<T>, To: const Adapter<T>, S> const Adapter<S>
+const impl<T, From: const Adapter<T>, To: const Adapter<T>, S> Adapter<S>
     for Relative<T, From, To, S>
 {
     fn offset() -> usize {
@@ -60,7 +60,7 @@ pub struct Nested<P, S: Adapter<P>, N, T: Adapter<N>>(
     PhantomData<T>,
 );
 
-impl<P, S: const Adapter<P>, N, T: const Adapter<N>> const Adapter<P> for Nested<P, S, N, T> {
+const impl<P, S: const Adapter<P>, N, T: const Adapter<N>> Adapter<P> for Nested<P, S, N, T> {
     fn offset() -> usize {
         S::offset() + T::offset()
     }
