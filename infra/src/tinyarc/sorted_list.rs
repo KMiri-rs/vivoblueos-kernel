@@ -16,7 +16,7 @@ use crate::{
     intrusive::Adapter,
     tinyarc::{TinyArc, TinyArcList},
 };
-use core::{cmp::Ordering, marker::PhantomData, ptr};
+use core::marker::PhantomData;
 
 /// TinyArcSortedList - Automatically sorted list data structure based on TinyArcList
 ///

@@ -246,9 +246,10 @@ where
         self.size += 1;
         let Some(mut parent) = node.parent else {
             debug_assert_eq!(path.0, 0);
-            self.root = Some(NonNull::from_mut(node));
+            let nn = NonNull::from_mut(node);
+            self.root = Some(nn);
             return Some(IouMinHeapNodeMut {
-                node: Some(node.into()),
+                node: Some(nn),
                 _lt: PhantomData,
             });
         };
@@ -872,7 +873,7 @@ mod tests {
         #[derive(Eq, Ord, PartialEq, PartialOrd)]
         struct Foo {
             val: usize,
-        };
+        }
         b.iter(|| {
             let mut heap = BinaryHeap::new();
             heap.push(0);
@@ -894,7 +895,7 @@ mod tests {
         #[derive(Eq, Ord, PartialEq, PartialOrd)]
         struct Foo {
             val: usize,
-        };
+        }
         b.iter(|| {
             let mut heap = BTreeSet::new();
             heap.insert(0);

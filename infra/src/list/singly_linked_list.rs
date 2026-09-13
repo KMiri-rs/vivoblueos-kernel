@@ -310,7 +310,7 @@ mod tests {
     fn raw_list_bench_push(b: &mut Bencher) {
         let n = 1 << 16;
         let mut l = SinglyLinkedList::new();
-        b.iter(|| unsafe {
+        b.iter(|| {
             for _ in 0..n {
                 let v = Box::new(BenchNode::new());
                 let ptr = unsafe { NonNull::new_unchecked(Box::into_raw(v)) };
@@ -329,7 +329,7 @@ mod tests {
     #[allow(clippy::unit_arg)]
     fn raw_list_bench_push_and_pop(b: &mut Bencher) {
         let n = 1 << 16;
-        b.iter(|| unsafe {
+        b.iter(|| {
             let mut l = SinglyLinkedList::new();
 
             // Push
@@ -569,8 +569,8 @@ mod tests {
 
     #[test]
     fn listnode_push_pop() {
-        let mut node1 = Box::new(100usize);
-        let mut node2 = Box::new(200usize);
+        let node1 = Box::new(100usize);
+        let node2 = Box::new(200usize);
 
         let ptr1 = unsafe { NonNull::new_unchecked(Box::into_raw(node1)) };
         let ptr2 = unsafe { NonNull::new_unchecked(Box::into_raw(node2)) };
@@ -580,7 +580,7 @@ mod tests {
             *node1_next_ptr = Some(ptr2);
         }
 
-        let prev_ptr = unsafe { ptr1.as_ptr() as *mut Option<NonNull<usize>> };
+        let prev_ptr = ptr1.as_ptr() as *mut Option<NonNull<usize>>;
 
         let list_node = ListNode {
             prev: prev_ptr,

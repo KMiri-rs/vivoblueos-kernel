@@ -74,7 +74,7 @@ mod tests {
     }
 
     fn operate_on_external_val(f: &mut Foo, val: &mut i32) {
-        let mut livefor;
+        let livefor;
         {
             livefor = assign_val(f, val);
             assert!(f.val.is_some());

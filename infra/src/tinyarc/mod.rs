@@ -39,6 +39,7 @@ type Uint = u8;
 type AtomicUint = core::sync::atomic::AtomicU8;
 
 #[cfg(target_pointer_width = "64")]
+#[allow(dead_code)]
 type Uint = usize;
 #[cfg(target_pointer_width = "64")]
 type AtomicUint = core::sync::atomic::AtomicUsize;
@@ -329,7 +330,7 @@ impl<T: Sized, A: Adapter<T>> TinyArcList<T, A> {
         if self.is_empty() {
             return None;
         }
-        let Some(mut prev) = self.tail.prev() else {
+        let Some(prev) = self.tail.prev() else {
             panic!("Tail's prev node should not be None");
         };
         Some(unsafe { Self::clone_from(prev.as_ref()) })
@@ -1007,8 +1008,8 @@ mod tests {
                     }
                 });
             }
-            t0.join();
-            t1.join();
+            let _ = t0.join();
+            let _ = t1.join();
         });
     }
 
@@ -1061,8 +1062,8 @@ mod tests {
                     }
                 });
             }
-            t0.join();
-            t1.join();
+            let _ = t0.join();
+            let _ = t1.join();
         });
     }
 

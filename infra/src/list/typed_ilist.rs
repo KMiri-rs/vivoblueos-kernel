@@ -458,10 +458,10 @@ impl<T, A: const Adapter<T>> List<T, A> {
 mod tests {
     use super::*;
     use crate::impl_simple_intrusive_adapter;
-    use core::mem::offset_of;
 
     impl_simple_intrusive_adapter!(OffsetOfLh, Foo, lh);
 
+    #[allow(dead_code)]
     #[derive(Default, Debug)]
     pub struct Foo {
         head: [u8; 8],
@@ -566,13 +566,13 @@ mod tests {
         let result = iter.next();
         assert!(result.is_none());
 
-        let mut node1 = Box::new(ListHead::<Foo, OffsetOfLh> {
+        let node1 = Box::new(ListHead::<Foo, OffsetOfLh> {
             prev: None,
             next: None,
             _t: PhantomData,
             _a: PhantomData,
         });
-        let mut node2 = Box::new(ListHead::<Foo, OffsetOfLh> {
+        let node2 = Box::new(ListHead::<Foo, OffsetOfLh> {
             prev: None,
             next: None,
             _t: PhantomData,
@@ -594,12 +594,15 @@ mod tests {
 
     #[test]
     fn test_adapter() {
+        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
+        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
         }
 
+        #[allow(dead_code)]
         struct B;
 
         // Deny following code
@@ -613,8 +616,10 @@ mod tests {
 
     #[test]
     fn test_safer_insert_and_detach() {
+        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
+        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
             val: usize,
@@ -661,8 +666,10 @@ mod tests {
 
     #[test]
     fn test_safer_insert_and_detach_several() {
+        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
+        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
             val: usize,
@@ -883,7 +890,6 @@ mod tests {
                 v.val = 73;
             };
             assert!(l.reorder_chosen_value_by(compare_val, move |v| v as *const A == val0_ptr));
-            let mut index = 0;
             for (index, v) in l.iter().enumerate() {
                 match index {
                     0 => {

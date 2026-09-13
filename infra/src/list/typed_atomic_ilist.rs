@@ -141,7 +141,7 @@ impl<T, A: Adapter<T>> AtomicListHead<T, A> {
             return false;
         }
         let mut prev = NonNull::new(tail.prev.swap(me as *mut _, Ordering::Relaxed));
-        if let Some(mut v) = prev.as_mut() {
+        if let Some(v) = prev.as_mut() {
             unsafe { v.as_mut().next = Some(NonNull::from_mut(me)) };
         };
         me.next = Some(NonNull::from_mut(tail));
@@ -162,7 +162,7 @@ impl<T, A: Adapter<T>> AtomicListHead<T, A> {
         }
         let prev_ptr = me.prev_ptr();
         let mut prev = NonNull::new(prev_ptr);
-        if let Some(mut v) = prev.as_mut() {
+        if let Some(v) = prev.as_mut() {
             unsafe { v.as_mut().next = me.next };
         };
         if let Some(mut next) = me.next {
@@ -239,7 +239,6 @@ impl<T, A: Adapter<T>> Iterator for AtomicListReverseIterator<T, A> {
 mod tests {
     use super::*;
     use crate::{impl_simple_intrusive_adapter, tinyarc::TinyArc as Arc, tinyrwlock::RwLock};
-    use core::mem::offset_of;
     use std::thread;
 
     impl_simple_intrusive_adapter!(OffsetOfLh, Foo, lh);
@@ -308,17 +307,17 @@ mod tests {
         let head = Arc::new(RwLock::new(Ty::new()));
         let n = 1024;
         let mut vt = Vec::new();
-        for i in 0..n {
+        for _i in 0..n {
             let head = head.clone();
             let t = thread::spawn(move || {
                 let mut f = Foo::default();
-                for k in 0..128 {
+                for _k in 0..128 {
                     {
                         let mut h = head.write();
                         assert!(Ty::insert_after(&mut *h, &mut f.lh));
                     }
                     {
-                        let mut h = head.write();
+                        let _h = head.write();
                         assert!(Ty::detach(&mut f.lh));
                         assert!(f.lh.is_detached());
                     }
@@ -340,14 +339,14 @@ mod tests {
         let detached = Arc::new(AtomicUsize::new(0));
         let n = 1024;
         let mut vt = Vec::new();
-        for i in 0..n {
+        for _i in 0..n {
             let head = head.clone();
             let mut f = t.clone();
             let inserted = inserted.clone();
             let detached = detached.clone();
             let t = thread::spawn(move || {
                 let lh = unsafe { Ty::list_head_of_mut(Arc::<Foo>::get_mut_unchecked(&mut f)) };
-                for k in 0..256 {
+                for _k in 0..256 {
                     {
                         let mut h = head.write();
                         if Ty::insert_after(&mut *h, lh) {
@@ -405,15 +404,15 @@ mod tests {
                 let now = now_in.load(Ordering::Acquire);
                 match now {
                     1 => {
-                        let aw = alice.write();
+                        let _aw = alice.write();
                         if Ty::detach(lh) {
-                            now_in.compare_exchange(1, 0, Ordering::Release, Ordering::Relaxed);
+                            let _ = now_in.compare_exchange(1, 0, Ordering::Release, Ordering::Relaxed);
                         }
                     }
                     2 => {
-                        let bw = bob.write();
+                        let _bw = bob.write();
                         if Ty::detach(lh) {
-                            now_in.compare_exchange(2, 0, Ordering::Release, Ordering::Relaxed);
+                            let _ = now_in.compare_exchange(2, 0, Ordering::Release, Ordering::Relaxed);
                         }
                     }
                     _ => {}
