@@ -15,6 +15,17 @@
 import("//build/templates/build_template.gni")
 import("//build/toolchain/blueos.gni")
 
+declare_args() {
+  # Filter miri tests to a single case; empty means run all tests.
+  # Override with single `test_strlen` testcase via:
+  # `gn gen out/none --args='board="none" miri_test_case="test_strlen"'`
+  # or `make miri_test CASE=test_strlen`
+  miri_test_case = ""
+  # Extra flags of miri or rustc.
+  # e.g. miri_flags=["-Aunsafe_op_in_unsafe_fn", "-Aunused"]
+  miri_flags = []
+}
+
 group("check_infra") {
   testonly = true
   deps = [ ":run_infra_unittest" ]
@@ -54,8 +65,10 @@ miri_test("infra_miri_test") {
   crate = "src/lib.rs"
   deps = [ ":blueos_infra" ]
 
-  # test_name = "test_basic"   # optional
-  extra_miri_flags = [
+  test_name = miri_test_case
+  extra_miri_flags = miri_flags
+  extra_miri_flags += [
+    "-Aunsafe_op_in_unsafe_fn", "-Aunused",
     # "-Zmiri-tree-borrows", # use tree borrow model
     # "-Zmiri-preemption-rate=0.01", # controls how often Miri forces a thread context switch during scheduling.
     # more miri flags...
