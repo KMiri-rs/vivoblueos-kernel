@@ -594,15 +594,12 @@ mod tests {
 
     #[test]
     fn test_adapter() {
-        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
-        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
         }
 
-        #[allow(dead_code)]
         struct B;
 
         // Deny following code
@@ -616,10 +613,8 @@ mod tests {
 
     #[test]
     fn test_safer_insert_and_detach() {
-        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
-        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
             val: usize,
@@ -666,10 +661,8 @@ mod tests {
 
     #[test]
     fn test_safer_insert_and_detach_several() {
-        #[allow(dead_code)]
         impl_simple_intrusive_adapter!(Node, A, node);
 
-        #[allow(dead_code)]
         struct A {
             node: ListHead<A, Node>,
             val: usize,
