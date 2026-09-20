@@ -190,7 +190,7 @@ where
             if (self.compare)(val, parent_val) != core::cmp::Ordering::Less {
                 break;
             }
-            unsafe { self.swap_nodes(NonNull::from_mut(unsafe { parent.as_mut() }), nonnull_node) };
+            unsafe { self.swap_nodes(NonNull::from_mut(parent.as_mut()), nonnull_node) };
         }
     }
 
@@ -591,10 +591,10 @@ where
             assert!(current.is_some());
             let current_mut = unsafe { current.unwrap().as_mut() };
             if 2 * i + 1 >= size {
-                unsafe { assert!(current_mut.link.left().is_none()) };
+                assert!(current_mut.link.left().is_none());
             }
             if 2 * i + 2 >= size {
-                unsafe { assert!(current_mut.link.right().is_none()) };
+                assert!(current_mut.link.right().is_none());
             }
             assert_eq!(current_mut.parent, current_parent);
             if path.0 == 0 {
