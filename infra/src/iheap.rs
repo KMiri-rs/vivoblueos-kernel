@@ -17,7 +17,7 @@
 use crate::{
     impl_simple_intrusive_adapter,
     intrusive::{Adapter, Nested},
-    list::typed_ilist::{ListHead, ListHeadIterator},
+    list::typed_ilist::ListHead,
 };
 use core::{marker::PhantomData, ptr::NonNull};
 
@@ -38,7 +38,7 @@ impl<T, A: const Adapter<T>> IouMinHeapNodeMut<'_, T, A> {
 
     pub unsafe fn from_mut(node: &mut T) -> Self {
         Self {
-            node: Some(NonNull::from_mut(MinHeapNode::<T, A>::node_of_mut(node))),
+            node: Some(MinHeapNode::<T, A>::node_of(node)),
             _lt: PhantomData,
         }
     }
@@ -56,9 +56,6 @@ const impl<T, A: const Adapter<T>> Adapter<MinHeapNode<T, A>> for Link<T, A> {
 #[allow(clippy::type_complexity)]
 type LinkType<T, A> = ListHead<T, Nested<T, A, MinHeapNode<T, A>, Link<T, A>>>;
 
-#[allow(clippy::type_complexity)]
-type LinkTypeIterator<T, A> = ListHeadIterator<T, Nested<T, A, MinHeapNode<T, A>, Link<T, A>>>;
-
 #[derive(Default, Debug)]
 pub struct MinHeapNode<T, A: const Adapter<T>> {
     // Put the `link` first so that we don't need to use the complex Nested
@@ -75,28 +72,45 @@ impl<T, A: const Adapter<T>> MinHeapNode<T, A> {
         }
     }
 
-    fn node_of_mut(this: &mut T) -> &mut Self {
-        let ptr = this as *mut T as *mut u8;
-        let node_ptr = unsafe { ptr.add(A::offset()) } as *mut Self;
-        unsafe { &mut *node_ptr }
+    // Keep the provenance of the complete T. A pointer derived from a reference
+    // to just the node/link cannot in general be used to recover an owner &T.
+    fn node_of(this: &mut T) -> NonNull<Self> {
+        let ptr = (this as *mut T).cast::<u8>().wrapping_add(A::offset());
+        unsafe { NonNull::new_unchecked(ptr.cast()) }
     }
 
-    fn node_of_link_mut(link: &mut LinkType<T, A>) -> &mut Self {
-        let ptr = link as *mut _ as *mut u8;
-        let node_ptr = unsafe { ptr.sub(Link::<T, A>::offset()) } as *mut Self;
-        unsafe { &mut *node_ptr }
+    fn node_of_link(link: NonNull<LinkType<T, A>>) -> NonNull<Self> {
+        let ptr = link
+            .as_ptr()
+            .cast::<u8>()
+            .wrapping_sub(Link::<T, A>::offset());
+        unsafe { NonNull::new_unchecked(ptr.cast()) }
     }
 
-    fn node_of_link(link: &LinkType<T, A>) -> &Self {
-        let ptr = link as *const _ as *const u8;
-        let node_ptr = unsafe { ptr.sub(Link::<T, A>::offset()) } as *const Self;
-        unsafe { &*node_ptr }
+    fn owner_ptr(node: NonNull<Self>) -> *mut T {
+        node.as_ptr().cast::<u8>().wrapping_sub(A::offset()).cast()
     }
 
-    fn owner(node: &Self) -> &T {
-        let ptr = node as *const _ as *const u8;
-        let base = unsafe { ptr.sub(A::offset()) as *const T };
-        unsafe { &*base }
+    // These helpers require a live node pointer derived from the complete T.
+    // They never create intermediate references or narrow the stored provenance.
+    unsafe fn link_ptr(node: NonNull<Self>) -> NonNull<LinkType<T, A>> {
+        NonNull::new_unchecked(core::ptr::addr_of_mut!((*node.as_ptr()).link))
+    }
+
+    unsafe fn left(node: NonNull<Self>) -> Option<NonNull<Self>> {
+        (*node.as_ptr()).link.prev.map(Self::node_of_link)
+    }
+
+    unsafe fn right(node: NonNull<Self>) -> Option<NonNull<Self>> {
+        (*node.as_ptr()).link.next.map(Self::node_of_link)
+    }
+
+    unsafe fn set_left(node: NonNull<Self>, child: Option<NonNull<Self>>) {
+        (*node.as_ptr()).link.prev = child.map(|child| Self::link_ptr(child));
+    }
+
+    unsafe fn set_right(node: NonNull<Self>, child: Option<NonNull<Self>>) {
+        (*node.as_ptr()).link.next = child.map(|child| Self::link_ptr(child));
     }
 }
 
@@ -141,13 +155,13 @@ where
         A: 'a,
     {
         let node = iou.node?;
-        Some(MinHeapNode::<T, A>::owner(unsafe { node.as_ref() }))
+        Some(unsafe { &*MinHeapNode::owner_ptr(node) })
     }
 
     #[allow(clippy::type_complexity)]
     fn node_at(
         &self,
-        mut i: usize,
+        i: usize,
         path: &mut (usize, usize),
     ) -> (
         Option<NonNull<MinHeapNode<T, A>>>,
@@ -160,70 +174,54 @@ where
         let mut current_parent = None;
         while height > 0 && current.is_some() {
             current_parent = current;
-            if direction & 1 == 0 {
-                current = current
-                    .as_mut()
-                    .and_then(|n| unsafe { n.as_mut() }.link.left())
-                    .map(|mut n| {
-                        NonNull::from_mut(MinHeapNode::node_of_link_mut(unsafe { n.as_mut() }))
-                    });
-            } else {
-                current = current
-                    .as_mut()
-                    .and_then(|n| unsafe { n.as_mut() }.link.right())
-                    .map(|mut n| {
-                        NonNull::from_mut(MinHeapNode::node_of_link_mut(unsafe { n.as_mut() }))
-                    });
-            }
+            current = current.and_then(|node| unsafe {
+                if direction & 1 == 0 {
+                    MinHeapNode::left(node)
+                } else {
+                    MinHeapNode::right(node)
+                }
+            });
             direction >>= 1;
             height -= 1;
         }
         (current, current_parent)
     }
 
-    fn bottom_up_adjust(&mut self, val: &T, mut nonnull_node: NonNull<MinHeapNode<T, A>>) {
-        loop {
-            let Some(mut parent) = unsafe { nonnull_node.as_mut() }.parent else {
-                break;
-            };
-            let parent_val = MinHeapNode::owner(unsafe { parent.as_mut() });
-            if (self.compare)(val, parent_val) != core::cmp::Ordering::Less {
+    fn compare_nodes(
+        &self,
+        a: NonNull<MinHeapNode<T, A>>,
+        b: NonNull<MinHeapNode<T, A>>,
+    ) -> core::cmp::Ordering {
+        // The owner references end before the caller changes any links.
+        unsafe { (self.compare)(&*MinHeapNode::owner_ptr(a), &*MinHeapNode::owner_ptr(b)) }
+    }
+
+    fn bottom_up_adjust(&mut self, node: NonNull<MinHeapNode<T, A>>) {
+        while let Some(parent) = unsafe { (*node.as_ptr()).parent } {
+            if self.compare_nodes(node, parent) != core::cmp::Ordering::Less {
                 break;
             }
-            unsafe { self.swap_nodes(NonNull::from_mut(parent.as_mut()), nonnull_node) };
+            unsafe { self.swap_nodes(parent, node) };
         }
     }
 
-    fn top_down_adjust(&mut self, val: &T, mut node: NonNull<MinHeapNode<T, A>>) {
+    fn top_down_adjust(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         loop {
-            let mut min_child = None;
-            let mut min_val = None;
-            if let Some(mut left) = unsafe { node.as_mut() }.link.left() {
-                min_child = Some(MinHeapNode::node_of_link_mut(unsafe { left.as_mut() }));
-                min_val = Some(MinHeapNode::owner(unsafe {
-                    min_child.as_ref().unwrap_unchecked()
-                }));
-            };
-            if let Some(mut right) = unsafe { node.as_mut() }.link.right() {
-                let right_child = MinHeapNode::node_of_link_mut(unsafe { right.as_mut() });
-                let right_val = MinHeapNode::owner(right_child);
-                if min_val.is_none()
-                    || (self.compare)(right_val, unsafe { min_val.unwrap_unchecked() })
-                        == core::cmp::Ordering::Less
+            let mut min_child = unsafe { MinHeapNode::left(node) };
+            if let Some(right) = unsafe { MinHeapNode::right(node) } {
+                if min_child.is_none()
+                    || self.compare_nodes(right, min_child.unwrap()) == core::cmp::Ordering::Less
                 {
-                    min_child = Some(right_child);
-                    min_val = Some(MinHeapNode::owner(unsafe {
-                        min_child.as_ref().unwrap_unchecked()
-                    }));
+                    min_child = Some(right);
                 }
-            };
-            let Some(tmp) = min_val else {
+            }
+            let Some(child) = min_child else {
                 break;
             };
-            if (self.compare)(val, tmp) == core::cmp::Ordering::Less {
+            if self.compare_nodes(node, child) == core::cmp::Ordering::Less {
                 break;
             }
-            unsafe { self.swap_nodes(node, NonNull::from_mut(min_child.unwrap())) };
+            unsafe { self.swap_nodes(node, child) };
         }
     }
 
@@ -232,88 +230,61 @@ where
     }
 
     pub fn push<'a>(&mut self, val: &'a mut T) -> Option<IouMinHeapNodeMut<'a, T, A>> {
-        let node = MinHeapNode::node_of_mut(val);
-        if Some(NonNull::from_mut(node)) == self.root {
-            return None;
-        }
-        if node.parent.is_some() || !node.link.is_detached() {
-            return None;
-        }
-        let mut path = (0, 0);
-        let (current, current_parent) = self.node_at(self.size, &mut path);
-        debug_assert!(current.is_none());
-        node.parent = current_parent;
-        self.size += 1;
-        let Some(mut parent) = node.parent else {
-            debug_assert_eq!(path.0, 0);
-            let nn = NonNull::from_mut(node);
-            self.root = Some(nn);
-            return Some(IouMinHeapNodeMut {
-                node: Some(nn),
-                _lt: PhantomData,
-            });
-        };
-        if (1 << (path.0 - 1)) & path.1 == 0 {
-            debug_assert_eq!(unsafe { parent.as_ref() }.link.left(), None);
-            unsafe { parent.as_mut() }
-                .link
-                .set_left(Some(NonNull::from_mut(&mut node.link)));
-        } else {
-            debug_assert_eq!(unsafe { parent.as_ref() }.link.right(), None);
-            unsafe { parent.as_mut() }
-                .link
-                .set_right(Some(NonNull::from_mut(&mut node.link)));
-        }
-        // We create a new node here, since we're unable to use split borrows with
-        // Self::node_of_mut.
-        let nonnull_node = NonNull::from_mut(node);
-        self.bottom_up_adjust(val, nonnull_node);
-        Some(IouMinHeapNodeMut {
-            node: Some(nonnull_node),
+        let node = MinHeapNode::node_of(val);
+        self.push_node(node).then_some(IouMinHeapNodeMut {
+            node: Some(node),
             _lt: PhantomData,
         })
     }
 
-    unsafe fn swap_nodes(
-        &mut self,
-        mut x: NonNull<MinHeapNode<T, A>>,
-        mut y: NonNull<MinHeapNode<T, A>>,
-    ) {
+    fn push_node(&mut self, node: NonNull<MinHeapNode<T, A>>) -> bool {
+        unsafe {
+            if Some(node) == self.root
+                || (*node.as_ptr()).parent.is_some()
+                || MinHeapNode::left(node).is_some()
+                || MinHeapNode::right(node).is_some()
+                || self.popped.next == Some(MinHeapNode::link_ptr(node))
+            {
+                return false;
+            }
+            let mut path = (0, 0);
+            let (current, parent) = self.node_at(self.size, &mut path);
+            debug_assert!(current.is_none());
+            (*node.as_ptr()).parent = parent;
+            self.size += 1;
+            let Some(parent) = parent else {
+                debug_assert_eq!(path.0, 0);
+                self.root = Some(node);
+                return true;
+            };
+            if (1 << (path.0 - 1)) & path.1 == 0 {
+                debug_assert_eq!(MinHeapNode::left(parent), None);
+                MinHeapNode::set_left(parent, Some(node));
+            } else {
+                debug_assert_eq!(MinHeapNode::right(parent), None);
+                MinHeapNode::set_right(parent, Some(node));
+            }
+            self.bottom_up_adjust(node);
+            true
+        }
+    }
+
+    unsafe fn swap_nodes(&mut self, x: NonNull<MinHeapNode<T, A>>, y: NonNull<MinHeapNode<T, A>>) {
         if x == y {
             return;
         }
 
-        let px = x.as_ref().parent;
-        let py = y.as_ref().parent;
+        let px = (*x.as_ptr()).parent;
+        let py = (*y.as_ptr()).parent;
 
         if px == Some(y) {
             return self.swap_nodes(y, x);
         }
 
-        let get_left = |n: NonNull<MinHeapNode<T, A>>| {
-            n.as_ref()
-                .link
-                .left()
-                .map(|v| NonNull::from_ref(MinHeapNode::node_of_link(v.as_ref())))
-        };
-        let get_right = |n: NonNull<MinHeapNode<T, A>>| {
-            n.as_ref()
-                .link
-                .right()
-                .map(|v| NonNull::from_ref(MinHeapNode::node_of_link(v.as_ref())))
-        };
-        let mut set_left = |mut p: NonNull<MinHeapNode<T, A>>,
-                            n: Option<NonNull<MinHeapNode<T, A>>>| {
-            p.as_mut()
-                .link
-                .set_left(n.map(|n| NonNull::from_ref(&n.as_ref().link)));
-        };
-        let mut set_right = |mut p: NonNull<MinHeapNode<T, A>>,
-                             n: Option<NonNull<MinHeapNode<T, A>>>| {
-            p.as_mut()
-                .link
-                .set_right(n.map(|n| NonNull::from_ref(&n.as_ref().link)));
-        };
+        let get_left = MinHeapNode::left;
+        let get_right = MinHeapNode::right;
+        let set_left = MinHeapNode::set_left;
+        let set_right = MinHeapNode::set_right;
 
         let lx = get_left(x);
         let rx = get_right(x);
@@ -330,7 +301,7 @@ where
                     self.root = Some(new_ptr);
                     None
                 }
-                Some(mut p) => {
+                Some(p) => {
                     let is_left = if get_left(p) == Some(old_ptr) {
                         set_left(p, Some(new_ptr));
                         true
@@ -345,30 +316,30 @@ where
 
         if py == Some(x) {
             update_parent_child(x, y, px);
-            y.as_mut().parent = px;
-            x.as_mut().parent = Some(y);
+            (*y.as_ptr()).parent = px;
+            (*x.as_ptr()).parent = Some(y);
 
             if lx == Some(y) {
                 set_left(y, Some(x));
                 set_right(y, rx);
-                if let Some(mut r) = rx {
-                    r.as_mut().parent = Some(y);
+                if let Some(r) = rx {
+                    (*r.as_ptr()).parent = Some(y);
                 }
             } else {
                 set_right(y, Some(x));
                 set_left(y, lx);
-                if let Some(mut l) = lx {
-                    l.as_mut().parent = Some(y);
+                if let Some(l) = lx {
+                    (*l.as_ptr()).parent = Some(y);
                 }
             }
 
             set_left(x, ly);
-            if let Some(mut l) = ly {
-                l.as_mut().parent = Some(x);
+            if let Some(l) = ly {
+                (*l.as_ptr()).parent = Some(x);
             }
             set_right(x, ry);
-            if let Some(mut r) = ry {
-                r.as_mut().parent = Some(x);
+            if let Some(r) = ry {
+                (*r.as_ptr()).parent = Some(x);
             }
         } else {
             let maybe_left = update_parent_child(x, y, px);
@@ -387,25 +358,25 @@ where
                 update_parent_child(y, x, py);
             }
 
-            x.as_mut().parent = py;
-            y.as_mut().parent = px;
+            (*x.as_ptr()).parent = py;
+            (*y.as_ptr()).parent = px;
 
             set_left(x, ly);
-            if let Some(mut l) = ly {
-                l.as_mut().parent = Some(x);
+            if let Some(l) = ly {
+                (*l.as_ptr()).parent = Some(x);
             }
             set_left(y, lx);
-            if let Some(mut l) = lx {
-                l.as_mut().parent = Some(y);
+            if let Some(l) = lx {
+                (*l.as_ptr()).parent = Some(y);
             }
 
             set_right(x, ry);
-            if let Some(mut r) = ry {
-                r.as_mut().parent = Some(x);
+            if let Some(r) = ry {
+                (*r.as_ptr()).parent = Some(x);
             }
             set_right(y, rx);
-            if let Some(mut r) = rx {
-                r.as_mut().parent = Some(y);
+            if let Some(r) = rx {
+                (*r.as_ptr()).parent = Some(y);
             }
         }
     }
@@ -414,88 +385,88 @@ where
         if Some(node) == self.root {
             return true;
         }
-        unsafe { node.as_ref().parent.is_some() }
+        unsafe { (*node.as_ptr()).parent.is_some() }
     }
 
-    fn inner_remove(&mut self, mut node: NonNull<MinHeapNode<T, A>>) {
+    fn inner_remove(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         let mut path = (0, 0);
         let (last, last_parent) = self.node_at(self.size - 1, &mut path);
-        let Some(mut last) = last else {
-            panic!("Node should not be None when the index is valid")
-        };
-        let last_mut = unsafe { last.as_mut() };
-        debug_assert!(last_mut.link.is_detached());
-        unsafe { self.swap_nodes(node, last) };
-        let node_mut = unsafe { node.as_mut() };
-        debug_assert!(node_mut.link.is_detached());
-        let node_parent = node_mut.parent.take();
-        debug_assert!(node_mut.parent.is_none());
-        self.size -= 1;
-        let Some(mut last_parent) = last_parent else {
-            let root = self.root.take();
-            debug_assert_eq!(root, Some(node));
-            debug_assert_eq!(last, node);
-            return;
-        };
-        debug_assert!(path.0 > 0);
-        let is_left = (1 << (path.0 - 1)) & path.1 == 0;
-        let last_parent_mut = unsafe { last_parent.as_mut() };
-        if node == last {
-            debug_assert_eq!(Some(last_parent), node_parent);
-            if is_left {
-                last_parent_mut.link.set_left(None);
+        let last = last.expect("Node should not be None when the index is valid");
+        unsafe {
+            debug_assert!(MinHeapNode::left(last).is_none());
+            debug_assert!(MinHeapNode::right(last).is_none());
+            self.swap_nodes(node, last);
+            debug_assert!(MinHeapNode::left(node).is_none());
+            debug_assert!(MinHeapNode::right(node).is_none());
+            let node_parent = (*node.as_ptr()).parent;
+            (*node.as_ptr()).parent = None;
+            self.size -= 1;
+            let Some(last_parent) = last_parent else {
+                let root = self.root.take();
+                debug_assert_eq!(root, Some(node));
+                debug_assert_eq!(last, node);
+                return;
+            };
+            debug_assert!(path.0 > 0);
+            let is_left = (1 << (path.0 - 1)) & path.1 == 0;
+            let parent = if node == last_parent {
+                last
             } else {
-                last_parent_mut.link.set_right(None);
-            }
-            return;
-        }
-        if node == last_parent {
-            debug_assert_eq!(Some(last), node_parent);
+                last_parent
+            };
+            debug_assert_eq!(Some(parent), node_parent);
             if is_left {
-                last_mut.link.set_left(None);
+                debug_assert_eq!(MinHeapNode::left(parent), Some(node));
+                MinHeapNode::set_left(parent, None);
             } else {
-                last_mut.link.set_right(None);
+                debug_assert_eq!(MinHeapNode::right(parent), Some(node));
+                MinHeapNode::set_right(parent, None);
             }
-        } else {
-            debug_assert_eq!(Some(last_parent), node_parent);
-            if is_left {
-                debug_assert_eq!(
-                    last_parent_mut.link.left(),
-                    Some(NonNull::from_mut(&mut node_mut.link))
-                );
-                last_parent_mut.link.set_left(None);
+            if node == last {
+                return;
+            }
+            if let Some(parent) = (*last.as_ptr()).parent {
+                if self.compare_nodes(last, parent) == core::cmp::Ordering::Less {
+                    self.bottom_up_adjust(last);
+                    return;
+                }
             } else {
-                debug_assert_eq!(
-                    last_parent_mut.link.right(),
-                    Some(NonNull::from_mut(&mut node_mut.link))
-                );
-                last_parent_mut.link.set_right(None);
+                debug_assert_eq!(self.root, Some(last));
             }
+            self.top_down_adjust(last);
         }
-        let last_val = MinHeapNode::owner(last_mut);
-        let Some(mut parent) = last_mut.parent else {
-            debug_assert_eq!(self.root, Some(last));
-            // self.swap_node should have set the self.root.
-            self.top_down_adjust(last_val, last);
-            return;
-        };
-        let parent_mut = unsafe { parent.as_mut() };
-        let parent_val = MinHeapNode::owner(parent_mut);
-        if (self.compare)(last_val, parent_val) == core::cmp::Ordering::Less {
-            return self.bottom_up_adjust(last_val, last);
+    }
+
+    fn detach_popped(&mut self, node: NonNull<MinHeapNode<T, A>>) -> bool {
+        unsafe {
+            let link = MinHeapNode::link_ptr(node);
+            let prev = (*link.as_ptr()).prev;
+            let next = (*link.as_ptr()).next;
+            if let Some(prev) = prev {
+                (*prev.as_ptr()).next = next;
+            } else if self.popped.next == Some(link) {
+                self.popped.next = next;
+            } else {
+                return false;
+            }
+            if let Some(next) = next {
+                (*next.as_ptr()).prev = prev;
+            }
+            (*link.as_ptr()).prev = None;
+            (*link.as_ptr()).next = None;
+            true
         }
-        self.top_down_adjust(last_val, last)
     }
 
     pub fn remove<'a>(
         &mut self,
-        mut iou: IouMinHeapNodeMut<'_, T, A>,
+        iou: IouMinHeapNodeMut<'_, T, A>,
     ) -> Option<IouMinHeapNodeMut<'a, T, A>> {
-        let Some(mut node) = iou.node else {
+        let Some(node) = iou.node else {
             panic!("Nil node")
         };
         if !self.is_linked_in_heap(node) {
-            if !LinkType::detach(&mut unsafe { node.as_mut() }.link) {
+            if !self.detach_popped(node) {
                 return None;
             }
             return Some(IouMinHeapNodeMut {
@@ -518,46 +489,42 @@ where
     }
 
     pub fn pop(&mut self) -> &mut Self {
-        let Some(mut node) = self.root else {
+        let Some(node) = self.root else {
             return self;
         };
         debug_assert!(self.is_linked_in_heap(node));
         self.inner_remove(node);
-        debug_assert!(unsafe { node.as_ref() }.link.is_detached());
-        debug_assert!(self.popped.prev.is_none());
-        let ok = LinkType::insert_after(&mut self.popped, &mut unsafe { node.as_mut() }.link);
-        debug_assert!(ok);
-        debug_assert_eq!(
-            self.popped.right(),
-            Some(NonNull::from_ref(&unsafe { node.as_ref() }.link))
-        );
-        debug_assert_eq!(
-            self.popped.next,
-            Some(NonNull::from_ref(&unsafe { node.as_ref() }.link))
-        );
-        debug_assert_eq!(
-            Some(NonNull::from_ref(&self.popped)),
-            unsafe { node.as_ref() }.link.prev
-        );
+        unsafe {
+            let link = MinHeapNode::link_ptr(node);
+            debug_assert!((*link.as_ptr()).prev.is_none());
+            debug_assert!((*link.as_ptr()).next.is_none());
+            // The first popped node has no predecessor. Storing &self.popped
+            // here would leave a pointer behind when the heap is moved/reborrowed.
+            if let Some(next) = self.popped.next {
+                (*next.as_ptr()).prev = Some(link);
+            }
+            (*link.as_ptr()).next = self.popped.next;
+            self.popped.next = Some(link);
+        }
         self
     }
 
     pub fn peek(&self) -> Option<&T> {
         let root = self.root?;
-        Some(MinHeapNode::owner(unsafe { root.as_ref() }))
+        Some(unsafe { &*MinHeapNode::owner_ptr(root) })
     }
 
     pub fn for_each_popped_value<F>(&mut self, f: F)
     where
         F: Fn(&mut T),
     {
-        let mut it = LinkTypeIterator::new(&self.popped, None);
-        for mut node in it {
-            let node_mut = unsafe { node.as_mut() };
-            debug_assert_ne!(node_mut.left(), Some(node));
-            debug_assert_ne!(node_mut.right(), Some(node));
-            let val = unsafe { LinkType::owner_mut(node_mut) };
-            f(val);
+        let mut current = self.popped.next;
+        while let Some(link) = current {
+            unsafe {
+                current = (*link.as_ptr()).next;
+                let node = MinHeapNode::node_of_link(link);
+                f(&mut *MinHeapNode::owner_ptr(node));
+            }
         }
     }
 
@@ -566,19 +533,21 @@ where
         F: Fn(&T) -> bool,
     {
         let mut chosen = 0;
-        let mut it = LinkTypeIterator::new(&self.popped, None);
-        for mut node in it {
-            debug_assert!(!self.is_linked_in_heap(unsafe {
-                NonNull::from_ref(MinHeapNode::node_of_link(node.as_ref()))
-            }));
-            let val = unsafe { LinkType::owner_mut(node.as_mut()) };
-            if !choose(val) {
-                continue;
+        let mut current = self.popped.next;
+        while let Some(link) = current {
+            let node = MinHeapNode::node_of_link(link);
+            unsafe {
+                current = (*link.as_ptr()).next;
+                debug_assert!(!self.is_linked_in_heap(node));
+                if !choose(&*MinHeapNode::owner_ptr(node)) {
+                    continue;
+                }
             }
-            LinkType::detach(unsafe { node.as_mut() });
-            debug_assert!(unsafe { node.as_mut() }.is_detached());
+            self.detach_popped(node);
+            // Keep stored pointers derived from the original borrow, not a temporary reborrow.
+            let inserted = self.push_node(node);
+            debug_assert!(inserted);
             chosen += 1;
-            self.push(val);
         }
         chosen
     }
@@ -587,38 +556,28 @@ where
         let size = self.size();
         for i in 0..size {
             let mut path = (0, 0);
-            let (current, current_parent) = self.node_at(i, &mut path);
-            assert!(current.is_some());
-            let current_mut = unsafe { current.unwrap().as_mut() };
-            if 2 * i + 1 >= size {
-                assert!(current_mut.link.left().is_none());
-            }
-            if 2 * i + 2 >= size {
-                assert!(current_mut.link.right().is_none());
-            }
-            assert_eq!(current_mut.parent, current_parent);
-            if path.0 == 0 {
-                assert!(current_parent.is_none());
-                assert_eq!(self.root, current);
-                continue;
-            }
-            assert!(current_parent.is_some());
-            let is_left = 1 << (path.0 - 1) & path.1 == 0;
-            let parent_ref = unsafe { current_parent.unwrap().as_ref() };
-            let parent_val = MinHeapNode::owner(parent_ref);
-            let current_val = MinHeapNode::owner(current_mut);
-            let order = (self.compare)(parent_val, current_val);
-            assert!(order == core::cmp::Ordering::Less || order == core::cmp::Ordering::Equal);
-            if is_left {
-                assert_eq!(
-                    parent_ref.link.left(),
-                    Some(NonNull::from_ref(&current_mut.link))
-                );
-            } else {
-                assert_eq!(
-                    parent_ref.link.right(),
-                    Some(NonNull::from_ref(&current_mut.link))
-                );
+            let (current, parent) = self.node_at(i, &mut path);
+            let node = current.expect("Node should not be None when the index is valid");
+            unsafe {
+                if 2 * i + 1 >= size {
+                    assert!(MinHeapNode::left(node).is_none());
+                }
+                if 2 * i + 2 >= size {
+                    assert!(MinHeapNode::right(node).is_none());
+                }
+                assert_eq!((*node.as_ptr()).parent, parent);
+                let Some(parent) = parent else {
+                    assert_eq!(path.0, 0);
+                    assert_eq!(self.root, current);
+                    continue;
+                };
+                let order = self.compare_nodes(parent, node);
+                assert!(order == core::cmp::Ordering::Less || order == core::cmp::Ordering::Equal);
+                if 1 << (path.0 - 1) & path.1 == 0 {
+                    assert_eq!(MinHeapNode::left(parent), current);
+                } else {
+                    assert_eq!(MinHeapNode::right(parent), current);
+                }
             }
         }
     }
@@ -635,6 +594,35 @@ mod tests {
     struct Foo {
         node: MinHeapNode<Foo, Node>,
         val: usize,
+    }
+
+    #[test]
+    fn test_nonzero_offset_push_pop() {
+        #[repr(C)]
+        struct Entry {
+            key: usize,
+            node: MinHeapNode<Entry, EntryAdapter>,
+        }
+        impl_simple_intrusive_adapter!(EntryAdapter, Entry, node);
+        assert_ne!(core::mem::offset_of!(Entry, node), 0);
+        let mut high = Box::new(Entry {
+            key: 2,
+            node: MinHeapNode::new(),
+        });
+        let mut low = Box::new(Entry {
+            key: 1,
+            node: MinHeapNode::new(),
+        });
+        let mut heap = MinHeap::<Entry, EntryAdapter, _>::new(|a, b| a.key.cmp(&b.key));
+        let high_iou = heap.push(&mut *high).unwrap();
+        let low_iou = heap.push(&mut *low).unwrap();
+        assert_eq!(heap.peek().unwrap().key, 1);
+        heap.pop();
+        assert_eq!(heap.peek().unwrap().key, 2);
+        assert!(heap.remove(low_iou).is_some());
+        heap.pop();
+        assert!(heap.peek().is_none());
+        assert!(heap.remove(high_iou).is_some());
     }
 
     #[test]
