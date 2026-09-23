@@ -98,19 +98,21 @@ impl<T, A: const Adapter<T>> MinHeapNode<T, A> {
     }
 
     unsafe fn left(node: NonNull<Self>) -> Option<NonNull<Self>> {
-        (*node.as_ptr()).link.prev.map(Self::node_of_link)
+        (*node.as_ptr()).link.left().map(Self::node_of_link)
     }
 
     unsafe fn right(node: NonNull<Self>) -> Option<NonNull<Self>> {
-        (*node.as_ptr()).link.next.map(Self::node_of_link)
+        (*node.as_ptr()).link.right().map(Self::node_of_link)
     }
 
     unsafe fn set_left(node: NonNull<Self>, child: Option<NonNull<Self>>) {
-        (*node.as_ptr()).link.prev = child.map(|child| Self::link_ptr(child));
+        let child = child.map(|c| Self::link_ptr(c));
+        (*node.as_ptr()).link.set_left(child);
     }
 
     unsafe fn set_right(node: NonNull<Self>, child: Option<NonNull<Self>>) {
-        (*node.as_ptr()).link.next = child.map(|child| Self::link_ptr(child));
+        let child = child.map(|c| Self::link_ptr(c));
+        (*node.as_ptr()).link.set_right(child);
     }
 }
 
