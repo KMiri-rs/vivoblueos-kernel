@@ -72,13 +72,26 @@ impl<T, A: const Adapter<T>> MinHeapNode<T, A> {
         }
     }
 
-    // Keep the provenance of the complete T. A pointer derived from a reference
-    // to just the node/link cannot in general be used to recover an owner &T.
+    /// Converts a mutable reference to the complete type `T` into a `NonNull`
+    /// pointer to its embedded `MinHeapNode`.
+    ///
+    /// This function preserves the provenance of the complete `T`, allowing
+    /// safe recovery of an `&T` reference later via [`owner_ptr`].
+    ///
+    /// # Safety
+    /// The caller must ensure that `this` actually contains a valid `MinHeapNode`
+    /// at offset `A::offset()`.
     fn node_of(this: &mut T) -> NonNull<Self> {
         let ptr = (this as *mut T).cast::<u8>().wrapping_add(A::offset());
         unsafe { NonNull::new_unchecked(ptr.cast()) }
     }
 
+    /// Recovers a `NonNull` pointer to `Self` from a `NonNull` pointer to its
+    /// embedded `LinkType`.
+    ///
+    /// # Safety
+    /// The caller must ensure that `link` points to a valid `LinkType` that is
+    /// part of a properly constructed `MinHeapNode`.
     fn node_of_link(link: NonNull<LinkType<T, A>>) -> NonNull<Self> {
         let ptr = link
             .as_ptr()
@@ -87,32 +100,73 @@ impl<T, A: const Adapter<T>> MinHeapNode<T, A> {
         unsafe { NonNull::new_unchecked(ptr.cast()) }
     }
 
+    /// Recovers a raw pointer to the complete type `T` from a `NonNull` pointer
+    /// to its embedded `MinHeapNode`.
+    ///
+    /// This is the inverse operation of [`node_of`]. Unlike `node_of`, which
+    /// starts from `&mut T`, this function works backwards from the node.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid `MinHeapNode` that
+    /// belongs to some `T` instance.
     fn owner_ptr(node: NonNull<Self>) -> *mut T {
         node.as_ptr().cast::<u8>().wrapping_sub(A::offset()).cast()
     }
 
-    // These helpers require a live node pointer derived from the complete T.
-    // They never create intermediate references or narrow the stored provenance.
+    /// Returns the `NonNull` pointer to the `LinkType` field within the node.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid `MinHeapNode`.
     unsafe fn link_ptr(node: NonNull<Self>) -> NonNull<LinkType<T, A>> {
         NonNull::new_unchecked(core::ptr::addr_of_mut!((*node.as_ptr()).link))
     }
 
+    /// Returns the left child of the given node, if it exists.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node.
     unsafe fn left(node: NonNull<Self>) -> Option<NonNull<Self>> {
         (*node.as_ptr()).link.left().map(Self::node_of_link)
     }
 
+    /// Returns the right child of the given node, if it exists.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node.
     unsafe fn right(node: NonNull<Self>) -> Option<NonNull<Self>> {
         (*node.as_ptr()).link.right().map(Self::node_of_link)
     }
 
+    /// Sets the left child of the given node.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node.
     unsafe fn set_left(node: NonNull<Self>, child: Option<NonNull<Self>>) {
         let child = child.map(|c| Self::link_ptr(c));
         (*node.as_ptr()).link.set_left(child);
     }
 
+    /// Sets the right child of the given node.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node.
     unsafe fn set_right(node: NonNull<Self>, child: Option<NonNull<Self>>) {
         let child = child.map(|c| Self::link_ptr(c));
         (*node.as_ptr()).link.set_right(child);
+    }
+
+    /// Asserts that the given node is detached (has no children).
+    ///
+    /// This is a helper for debug assertions in testing and validation.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node.
+    #[cfg(debug_assertions)]
+    fn assert_detached(node: NonNull<Self>) {
+        unsafe {
+            debug_assert!(Self::left(node).is_none());
+            debug_assert!(Self::right(node).is_none());
+        }
     }
 }
 
@@ -160,6 +214,11 @@ where
         Some(unsafe { &*MinHeapNode::owner_ptr(node) })
     }
 
+    /// Locates the heap node at the given index `i` by computing its path
+    /// from the root.
+    ///
+    /// Returns a tuple of `(current_node, parent_node)`, where `current_node`
+    /// is the node at index `i` and `parent_node` is its parent.
     #[allow(clippy::type_complexity)]
     fn node_at(
         &self,
@@ -189,6 +248,10 @@ where
         (current, current_parent)
     }
 
+    /// Compares two heap nodes by their owner values.
+    ///
+    /// The comparison is performed on the complete `T` instances that own
+    /// these nodes, ensuring correct ordering semantics.
     fn compare_nodes(
         &self,
         a: NonNull<MinHeapNode<T, A>>,
@@ -198,6 +261,10 @@ where
         unsafe { (self.compare)(&*MinHeapNode::owner_ptr(a), &*MinHeapNode::owner_ptr(b)) }
     }
 
+    /// Restores the heap property by moving a node up toward the root.
+    ///
+    /// This is called after inserting a new node or after removing a node
+    /// where the replacement may violate the min-heap invariant.
     fn bottom_up_adjust(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         while let Some(parent) = unsafe { (*node.as_ptr()).parent } {
             if self.compare_nodes(node, parent) != core::cmp::Ordering::Less {
@@ -207,6 +274,10 @@ where
         }
     }
 
+    /// Restores the heap property by moving a node down toward a leaf.
+    ///
+    /// This is called after removing the root node and replacing it with
+    /// the last node in the heap.
     fn top_down_adjust(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         loop {
             let mut min_child = unsafe { MinHeapNode::left(node) };
@@ -239,6 +310,15 @@ where
         })
     }
 
+    /// Attempts to insert a node into the heap.
+    ///
+    /// This internal method performs all validation checks and tree modifications.
+    /// Returns `true` if the node was successfully inserted, `false` otherwise.
+    ///
+    /// Validation criteria:
+    /// - Node is not already in the heap (not root and no parent)
+    /// - Node has no existing children (not already linked)
+    /// - Node is not already in the popped list
     fn push_node(&mut self, node: NonNull<MinHeapNode<T, A>>) -> bool {
         unsafe {
             if Some(node) == self.root
@@ -271,6 +351,15 @@ where
         }
     }
 
+    /// Swaps two nodes in the heap, preserving all tree relationships.
+    ///
+    /// This is a complex operation that maintains:
+    /// - Parent-child relationships for both swapped nodes
+    /// - Sibling node parent pointers
+    /// - The root pointer if one of the nodes is the root
+    ///
+    /// # Safety
+    /// The caller must ensure that both `x` and `y` point to valid heap nodes.
     unsafe fn swap_nodes(&mut self, x: NonNull<MinHeapNode<T, A>>, y: NonNull<MinHeapNode<T, A>>) {
         if x == y {
             return;
@@ -390,16 +479,18 @@ where
         unsafe { (*node.as_ptr()).parent.is_some() }
     }
 
+    /// Removes a node from the heap and restores the heap property.
+    ///
+    /// The removed node is effectively replaced by the last node in the heap,
+    /// then either bubbled up or pushed down as needed.
     fn inner_remove(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         let mut path = (0, 0);
         let (last, last_parent) = self.node_at(self.size - 1, &mut path);
         let last = last.expect("Node should not be None when the index is valid");
         unsafe {
-            debug_assert!(MinHeapNode::left(last).is_none());
-            debug_assert!(MinHeapNode::right(last).is_none());
+            MinHeapNode::assert_detached(last);
             self.swap_nodes(node, last);
-            debug_assert!(MinHeapNode::left(node).is_none());
-            debug_assert!(MinHeapNode::right(node).is_none());
+            MinHeapNode::assert_detached(node);
             let node_parent = (*node.as_ptr()).parent;
             (*node.as_ptr()).parent = None;
             self.size -= 1;
@@ -439,7 +530,14 @@ where
         }
     }
 
-    fn detach_popped(&mut self, node: NonNull<MinHeapNode<T, A>>) -> bool {
+    /// Detaches a popped node from the popped list.
+    ///
+    /// This removes the node's link from the doubly-linked list of popped nodes.
+    ///
+    /// # Safety
+    /// The caller must ensure that `node` points to a valid heap node that is
+    /// currently linked in the popped list.
+    fn detach_popped(&mut self, node: NonNull<MinHeapNode<T, A>>) {
         unsafe {
             let link = MinHeapNode::link_ptr(node);
             let prev = (*link.as_ptr()).prev;
@@ -449,14 +547,13 @@ where
             } else if self.popped.next == Some(link) {
                 self.popped.next = next;
             } else {
-                return false;
+                panic!("Internal error: failed to detach popped node");
             }
             if let Some(next) = next {
                 (*next.as_ptr()).prev = prev;
             }
             (*link.as_ptr()).prev = None;
             (*link.as_ptr()).next = None;
-            true
         }
     }
 
@@ -468,9 +565,7 @@ where
             panic!("Nil node")
         };
         if !self.is_linked_in_heap(node) {
-            if !self.detach_popped(node) {
-                return None;
-            }
+            self.detach_popped(node);
             return Some(IouMinHeapNodeMut {
                 node: None,
                 _lt: PhantomData,
@@ -530,6 +625,14 @@ where
         }
     }
 
+    /// Moves selected popped values back into the heap.
+    ///
+    /// Iterates over all nodes in the popped list and applies the `choose`
+    /// predicate to each. Nodes that return `true` are detached from the
+    /// popped list and re-inserted into the heap.
+    ///
+    /// # Returns
+    /// The number of nodes that were moved back into the heap.
     pub fn move_chosen_popped_values_to_heap<F>(&mut self, choose: F) -> usize
     where
         F: Fn(&T) -> bool,
@@ -600,13 +703,18 @@ mod tests {
 
     #[test]
     fn test_nonzero_offset_push_pop() {
+        // Use explicit alignment to ensure the node field is not at offset 0.
+        // This tests the heap's ability to handle non-trivial field offsets.
         #[repr(C)]
         struct Entry {
             key: usize,
             node: MinHeapNode<Entry, EntryAdapter>,
         }
         impl_simple_intrusive_adapter!(EntryAdapter, Entry, node);
-        assert_ne!(core::mem::offset_of!(Entry, node), 0);
+
+        let offset = core::mem::offset_of!(Entry, node);
+        assert_ne!(offset, 0, "node offset should be non-zero due to alignment");
+
         let mut high = Box::new(Entry {
             key: 2,
             node: MinHeapNode::new(),
