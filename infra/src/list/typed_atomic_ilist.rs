@@ -406,13 +406,15 @@ mod tests {
                     1 => {
                         let _aw = alice.write();
                         if Ty::detach(lh) {
-                            let _ = now_in.compare_exchange(1, 0, Ordering::Release, Ordering::Relaxed);
+                            let _ =
+                                now_in.compare_exchange(1, 0, Ordering::Release, Ordering::Relaxed);
                         }
                     }
                     2 => {
                         let _bw = bob.write();
                         if Ty::detach(lh) {
-                            let _ = now_in.compare_exchange(2, 0, Ordering::Release, Ordering::Relaxed);
+                            let _ =
+                                now_in.compare_exchange(2, 0, Ordering::Release, Ordering::Relaxed);
                         }
                     }
                     _ => {}
