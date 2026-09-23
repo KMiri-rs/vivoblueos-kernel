@@ -514,16 +514,37 @@ impl<'a, T, A: Adapter<T> + 'a> Iterator for TinyArcListReverseIterator<'a, T, A
     }
 }
 
+// The slot is shared (`&self`) and mutated. The pointer therefore lives in
+// `AtomicPtr` (`UnsafeCell`). Casting a shared `Option<TinyArc<T>>` to
+// `&AtomicPtr` and writing it is Stacked/Tree Borrows UB.
 #[repr(transparent)]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TinyArcCas<T: Sized> {
-    inner: Option<TinyArc<T>>,
+    inner: AtomicPtr<TinyArcInner<T>>,
+}
+
+impl<T: Sized> Default for TinyArcCas<T> {
+    fn default() -> Self {
+        Self {
+            inner: AtomicPtr::new(core::ptr::null_mut()),
+        }
+    }
 }
 
 impl<T: Sized> Clone for TinyArcCas<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: self.load(Ordering::Relaxed),
+        match self.load(Ordering::Relaxed) {
+            Some(arc) => Self::from_arc(arc),
+            None => Self::default(),
+        }
+    }
+}
+
+impl<T: Sized> Drop for TinyArcCas<T> {
+    fn drop(&mut self) {
+        let ptr = *self.inner.get_mut();
+        if !ptr.is_null() {
+            drop(unsafe { TinyArc::from_inner(NonNull::new_unchecked(ptr)) });
         }
     }
 }
@@ -537,8 +558,7 @@ impl<T: Sized> TinyArcCas<T> {
     }
 
     pub fn load(&self, order: Ordering) -> Option<TinyArc<T>> {
-        let this = unsafe { &*(self as *const Self as *const AtomicPtr<TinyArcInner<T>>) };
-        let inner = this.load(order);
+        let inner = self.inner.load(order);
         if inner.is_null() {
             return None;
         }
@@ -546,11 +566,18 @@ impl<T: Sized> TinyArcCas<T> {
     }
 
     pub fn from_arc(arc: TinyArc<T>) -> Self {
-        Self { inner: Some(arc) }
+        let ptr = unsafe { TinyArc::inner(&arc).as_ptr() };
+        core::mem::forget(arc);
+        Self {
+            inner: AtomicPtr::new(ptr),
+        }
     }
 
-    pub const fn new(inner: Option<TinyArc<T>>) -> Self {
-        Self { inner }
+    pub fn new(inner: Option<TinyArc<T>>) -> Self {
+        match inner {
+            Some(arc) => Self::from_arc(arc),
+            None => Self::default(),
+        }
     }
 
     // Why don't we use standard interface? Like
@@ -582,11 +609,10 @@ impl<T: Sized> TinyArcCas<T> {
         success: Ordering,
         failure: Ordering,
     ) -> bool {
-        let this = unsafe { &*(self as *const Self as *const AtomicPtr<TinyArcInner<T>>) };
         let compare_ptr = Self::as_mut_ptr(&compare);
         let new_ptr = Self::as_mut_ptr(&new);
         // Must be noted, counters of these TinyArc are not updated atomically.
-        match this.compare_exchange(compare_ptr, new_ptr, success, failure) {
+        match self.inner.compare_exchange(compare_ptr, new_ptr, success, failure) {
             Ok(_) => {
                 if let Some(compare) = compare.as_ref() {
                     unsafe { TinyArc::decrement_strong_count(compare) };
@@ -599,9 +625,8 @@ impl<T: Sized> TinyArcCas<T> {
     }
 
     pub fn swap(&self, new: Option<TinyArc<T>>, order: Ordering) -> Option<TinyArc<T>> {
-        let this = unsafe { &*(self as *const Self as *const AtomicPtr<TinyArcInner<T>>) };
         let new_ptr = Self::as_mut_ptr(&new);
-        let old_ptr = this.swap(new_ptr, order);
+        let old_ptr = self.inner.swap(new_ptr, order);
         core::mem::forget(new);
         if old_ptr.is_null() {
             return None;
