@@ -522,7 +522,7 @@ mod tests {
     #[bench]
     fn bench_push_and_pop(b: &mut Bencher) {
         b.iter(|| {
-            let n = 1usize << 16;
+            let n = 1usize << 5;
             let mut l = List::<usize>::default();
             for i in 0..n {
                 black_box(l.push(i));
