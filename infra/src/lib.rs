@@ -27,6 +27,33 @@
 #![feature(ptr_as_uninit)]
 #![feature(slice_ptr_get)]
 
+#[doc(hidden)]
+pub struct MiriPrint;
+impl core::fmt::Write for MiriPrint {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        unsafe extern "Rust" {
+            #[allow(dead_code)]
+            fn miri_write_to_stdout(bytes: &[u8]);
+        }
+
+        unsafe { miri_write_to_stdout(s.as_bytes()) };
+        Result::Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! miri_println {
+    ($($arg:tt)*) => {
+        #[cfg(miri)]
+        {
+            use ::core::fmt::Write;
+            let print = &mut $crate::MiriPrint;
+            let _ = ::core::write!(print, $($arg)*);
+            let _ = print.write_str("\n");
+        }
+    };
+}
+
 pub mod intrusive;
 pub mod lifetime;
 pub mod list;
