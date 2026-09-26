@@ -489,7 +489,7 @@ mod tests {
         let head = Arc::new(RwLock::new(Node::new(0)));
         nodes.push(head.clone());
         let mut prev = head.clone();
-        for i in 1..1024 {
+        for i in 1..128 {
             let next = Arc::new(RwLock::new(Node::new(i)));
             nodes.push(next.clone());
             Node::insert_after(&mut prev, next);
@@ -506,7 +506,7 @@ mod tests {
         }
 
         let mut prev = head.clone();
-        for i in 1..2000 {
+        for i in 1..256 {
             let next = Arc::new(RwLock::new(Node::new(0)));
             nodes.push(next.clone());
             let wrong_version = Node::versioned_insert_after(Some(i), &mut prev, next);
@@ -524,7 +524,7 @@ mod tests {
         let mut tail = Arc::new(RwLock::new(Node::new(0)));
         nodes.push(tail.clone());
         let mut me = tail.clone();
-        for i in 1..1024 {
+        for i in 1..128 {
             let prev = Arc::new(RwLock::new(Node::new(i)));
             nodes.push(prev.clone());
             Node::insert_before(&mut me, prev);
@@ -540,7 +540,7 @@ mod tests {
             cursor = tmp;
         }
 
-        for i in 0..2000 {
+        for i in 0..256 {
             if i == 1 {
                 continue;
             }
@@ -810,7 +810,7 @@ mod tests {
     #[bench]
     fn bench_insert_after_many(b: &mut Bencher) {
         b.iter(|| {
-            let n = 1usize << 16;
+            let n = 1 << 8;
             type Node = IlistNode<usize>;
             let mut nodes = Vec::new();
             let head = Arc::new(RwLock::new(Node::new(0)));

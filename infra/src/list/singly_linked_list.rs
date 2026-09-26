@@ -328,7 +328,7 @@ mod tests {
     #[bench]
     #[allow(clippy::unit_arg)]
     fn raw_list_bench_push_and_pop(b: &mut Bencher) {
-        let n = 1 << 16;
+        let n = 1 << 8;
         b.iter(|| {
             let mut l = SinglyLinkedList::new();
 
