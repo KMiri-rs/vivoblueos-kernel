@@ -612,7 +612,10 @@ impl<T: Sized> TinyArcCas<T> {
         let compare_ptr = Self::as_mut_ptr(&compare);
         let new_ptr = Self::as_mut_ptr(&new);
         // Must be noted, counters of these TinyArc are not updated atomically.
-        match self.inner.compare_exchange(compare_ptr, new_ptr, success, failure) {
+        match self
+            .inner
+            .compare_exchange(compare_ptr, new_ptr, success, failure)
+        {
             Ok(_) => {
                 if let Some(compare) = compare.as_ref() {
                     unsafe { TinyArc::decrement_strong_count(compare) };
