@@ -16,10 +16,13 @@ import("//build/templates/build_template.gni")
 import("//build/toolchain/blueos.gni")
 
 declare_args() {
-  # Filter miri tests to a single case; empty means run all tests.
+  # Filter miri tests by name; empty means run all tests.
   # Override with single `test_strlen` testcase via:
   # `gn gen out/none --args='board="none" miri_test_case="test_strlen"'`
   # or `make miri_test CASE=test_strlen`
+  # Several comma-separated testcases are passed as separate filters, so every
+  # test matching any one of them runs:
+  # `make miri_test CASE=test_strlen,bench_push_and_pop`
   miri_test_case = ""
   # Extra flags of miri or rustc.
   # e.g. miri_flags=["-Aunsafe_op_in_unsafe_fn", "-Aunused"]

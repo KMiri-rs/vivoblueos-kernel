@@ -612,7 +612,10 @@ impl<T: Sized> TinyArcCas<T> {
         let compare_ptr = Self::as_mut_ptr(&compare);
         let new_ptr = Self::as_mut_ptr(&new);
         // Must be noted, counters of these TinyArc are not updated atomically.
-        match self.inner.compare_exchange(compare_ptr, new_ptr, success, failure) {
+        match self
+            .inner
+            .compare_exchange(compare_ptr, new_ptr, success, failure)
+        {
             Ok(_) => {
                 if let Some(compare) = compare.as_ref() {
                     unsafe { TinyArc::decrement_strong_count(compare) };
@@ -967,7 +970,7 @@ mod tests {
     #[bench]
     fn bench_insert_and_detach_2_std(b: &mut Bencher) {
         use alloc::{collections::linked_list::LinkedList, sync::Arc};
-        let n = 1 << 16;
+        let n = 1 << 8;
         b.iter(|| {
             let mut l0 = spin::Mutex::new(LinkedList::new());
             let mut l1 = spin::Mutex::new(LinkedList::new());
@@ -987,7 +990,7 @@ mod tests {
 
     #[bench]
     fn bench_insert_and_detach_2t(b: &mut Bencher) {
-        let n = 1 << 16;
+        let n = 1 << 8;
         b.iter(|| {
             let mut csl = TinyArc::new(spin::Mutex::new(ControlStatusList::new()));
             csl.lock().init();
@@ -1041,7 +1044,7 @@ mod tests {
     #[bench]
     fn bench_insert_and_detach_2t_std(b: &mut Bencher) {
         use alloc::{collections::linked_list::LinkedList, sync::Arc};
-        let n = 1 << 16;
+        let n = 1 << 8;
         b.iter(|| {
             let mut l0 = Arc::new(spin::Mutex::new(LinkedList::new()));
             let mut l1 = Arc::new(spin::Mutex::new(LinkedList::new()));

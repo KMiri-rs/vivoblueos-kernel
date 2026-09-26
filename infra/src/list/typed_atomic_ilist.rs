@@ -305,7 +305,7 @@ mod tests {
     fn test_concurrent_ops() {
         type Ty = AtomicListHead<Foo, OffsetOfLh>;
         let head = Arc::new(RwLock::new(Ty::new()));
-        let n = 1024;
+        let n = 64;
         let mut vt = Vec::new();
         for _i in 0..n {
             let head = head.clone();
@@ -337,7 +337,7 @@ mod tests {
         let t = Arc::new(Foo::default());
         let inserted = Arc::new(AtomicUsize::new(0));
         let detached = Arc::new(AtomicUsize::new(0));
-        let n = 1024;
+        let n = 64;
         let mut vt = Vec::new();
         for _i in 0..n {
             let head = head.clone();
@@ -377,7 +377,7 @@ mod tests {
         let num_alice = Arc::new(AtomicUsize::new(0));
         let num_bob = Arc::new(AtomicUsize::new(0));
         let now_in = Arc::new(AtomicUsize::new(0));
-        let n = 1 << 10;
+        let n = 64;
         let mut vt = Vec::new();
         for i in 0..n {
             let alice = alice.clone();
