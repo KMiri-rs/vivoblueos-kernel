@@ -273,7 +273,7 @@ pub struct ArcBufferingQueue<T: Sized, A: IntrusiveAdapter<T>, const N: usize> {
 
 impl<T: Sized, A: IntrusiveAdapter<T>, const N: usize> Init for ArcBufferingQueue<T, A, N> {
     fn init(&mut self) -> bool {
-        self.init_queues() == N
+        ArcBufferingQueue::<T, A, N>::init_queues(self) == N
     }
 }
 

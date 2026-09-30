@@ -42,7 +42,7 @@ use core::{
 };
 
 mod builder;
-pub use builder::*;
+pub use builder::{build_static_thread, Builder, GlobalQueueVisitor, SystemThreadStorage, *};
 
 pub type ThreadNode = Arc<Thread>;
 

@@ -224,7 +224,7 @@ unsafe impl<T: ?Sized + Sync> Sync for SpinLock<T> {}
 #[derive(Default, Debug)]
 struct ISpinLockOffset<T: Sized, A: const IntrusiveAdapter<T>>(PhantomData<T>, PhantomData<A>);
 
-impl<T: Sized, A: const IntrusiveAdapter<T>> const IntrusiveAdapter<ISpinLock<T, A>>
+const impl<T: Sized, A: const IntrusiveAdapter<T>> IntrusiveAdapter<ISpinLock<T, A>>
     for ISpinLockOffset<T, A>
 {
     fn offset() -> usize {

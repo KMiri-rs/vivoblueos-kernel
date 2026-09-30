@@ -48,7 +48,7 @@ pub struct GlobalQueueVisitor<'a> {
 #[derive(Default, Debug)]
 pub(crate) struct GlobalQueue;
 
-impl const StaticListOwner<Thread, OffsetOfGlobal> for GlobalQueue {
+const impl StaticListOwner<Thread, OffsetOfGlobal> for GlobalQueue {
     fn get() -> &'static Arc<SpinLock<Head>> {
         &GLOBAL_QUEUE
     }
@@ -166,7 +166,7 @@ pub(crate) struct SystemThreadStack {
 }
 
 #[derive(Debug)]
-pub(crate) struct SystemThreadStorage {
+pub struct SystemThreadStorage {
     pub(crate) arc: ArcInner<Thread>,
     pub(crate) stack: SystemThreadStack,
 }
@@ -182,7 +182,7 @@ impl SystemThreadStorage {
     }
 }
 
-pub(crate) fn build_static_thread(
+pub fn build_static_thread(
     t: &'static mut MaybeUninit<ThreadNode>,
     // It must be 'static, since the ThreadNode returned doesn't
     // carry lifetime relationship to the SystemThreadStorage.

@@ -78,7 +78,7 @@ static_arc! {
 }
 
 pub(crate) fn init() {
-    ASYNC_WORK_QUEUE.init_queues();
+    ArcBufferingQueue::<Tasklet, TaskletNode, 2>::init_queues(&ASYNC_WORK_QUEUE);
     let poller = thread::build_static_thread(
         unsafe { &mut POLLER },
         unsafe { &mut POLLER_STORAGE },
