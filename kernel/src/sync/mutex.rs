@@ -64,7 +64,7 @@ pub struct Mutex {
 }
 
 impl Mutex {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             pending: SpinLock::new(WaitQueue::new()),
             nesting_count: Cell::new(0),

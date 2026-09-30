@@ -43,6 +43,7 @@ static mut SW_TIMER_WORKER: SoftTimerWorker = SoftTimerWorker::new();
 
 static EXPIRE_BARRIER: SpinLock<()> = SpinLock::new(());
 
+#[cfg(soft_timer)]
 struct SoftTimerWorker {
     waker: AtomicUsize,
     timers: SpinLock<TimerManager>,
@@ -50,6 +51,7 @@ struct SoftTimerWorker {
     thread: MaybeUninit<ThreadNode>,
 }
 
+#[cfg(soft_timer)]
 impl SoftTimerWorker {
     pub const fn new() -> Self {
         Self {
@@ -61,6 +63,7 @@ impl SoftTimerWorker {
     }
 }
 
+#[cfg(soft_timer)]
 extern "C" fn run_soft_timer() {
     loop {
         let n = unsafe { &SW_TIMER_WORKER.waker }.load(Ordering::Relaxed);
@@ -74,6 +77,7 @@ extern "C" fn run_soft_timer() {
 }
 
 // Wake up worker to run bottom half.
+#[cfg(soft_timer)]
 fn wake_up_soft_timer_worker(deadline: Tick) -> Option<Tick> {
     let res;
     {
@@ -138,7 +142,7 @@ impl core::fmt::Debug for TimerCallback {
 
 #[derive(Default, Debug)]
 pub struct Node;
-impl const IntrusiveAdapter<Timer> for Node {
+const impl IntrusiveAdapter<Timer> for Node {
     fn offset() -> usize {
         core::mem::offset_of!(Timer, node)
     }
@@ -205,6 +209,7 @@ pub(crate) fn compare_timer(lhs: &Timer, rhs: &Timer) -> core::cmp::Ordering {
     lhs.0.cmp(&rhs.0)
 }
 
+#[cfg(soft_timer)]
 pub fn add_soft_timer(tm: &mut Timer) -> Option<Iou<'_>> {
     let mut iou;
     {
@@ -216,6 +221,7 @@ pub fn add_soft_timer(tm: &mut Timer) -> Option<Iou<'_>> {
     iou
 }
 
+#[cfg(soft_timer)]
 pub fn remove_soft_timer<'a>(iou: Iou<'_>) -> Option<Iou<'a>> {
     let res;
     {
@@ -252,6 +258,7 @@ pub fn is_active_hard_timer(iou: &Iou<'_>) -> bool {
     w.is_active(iou)
 }
 
+#[cfg(soft_timer)]
 pub fn is_active_soft_timer(iou: &Iou<'_>) -> bool {
     let mut w = unsafe { &SW_TIMER_WORKER.timers }.irqsave_lock();
     w.is_active(iou)
@@ -260,7 +267,10 @@ pub fn is_active_soft_timer(iou: &Iou<'_>) -> bool {
 pub(crate) fn expire_timers(deadline: Tick) -> Option<Tick> {
     let _guard = EXPIRE_BARRIER.try_irqsave_lock()?;
 
-    let soft_deadline = wake_up_soft_timer_worker(deadline).unwrap_or(Tick::MAX);
+    let soft_deadline = {
+        #[cfg(soft_timer)] { wake_up_soft_timer_worker(deadline).unwrap_or(Tick::MAX) }
+        #[cfg(not(soft_timer))] { Tick::MAX }
+    };
     let hard_deadline;
     let res;
     {
@@ -278,8 +288,11 @@ pub(crate) fn expire_timers(deadline: Tick) -> Option<Tick> {
 
 fn update_clock_interrupt() -> Tick {
     let soft_deadline = {
-        let mut w = unsafe { &SW_TIMER_WORKER.timers }.irqsave_lock();
-        w.next_deadline().unwrap_or(Tick::MAX)
+        #[cfg(soft_timer)] {
+            let mut w = unsafe { &SW_TIMER_WORKER.timers }.irqsave_lock();
+            w.next_deadline().unwrap_or(Tick::MAX)
+        }
+        #[cfg(not(soft_timer))] { Tick::MAX }
     };
     let hard_deadline = HW_TIMERS
         .irqsave_lock()

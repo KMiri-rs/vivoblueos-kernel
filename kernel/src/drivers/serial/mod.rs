@@ -121,7 +121,7 @@ impl Serial {
                                 // trigger the TX interrupt to start sending out the data in FIFO.
                                 self.trigger_tx_interrupt();
                                 if is_schedule_ready() {
-                                    match atomic_wait(&self.tx_futex, tx_seq, Tick::MAX) {
+                                    match atomic_wait::atomic_wait(&self.tx_futex, tx_seq, Tick::MAX) {
                                         Ok(()) | Err(code::EAGAIN) => {}
                                         Err(code::ETIMEDOUT) => return Err(ErrorKind::TimedOut),
                                         Err(_) => return Err(ErrorKind::Other),
@@ -182,7 +182,7 @@ impl Serial {
                     break;
                 }
 
-                match atomic_wait(&self.rx_futex, rx_seq, Tick::MAX) {
+                match atomic_wait::atomic_wait(&self.rx_futex, rx_seq, Tick::MAX) {
                     Ok(()) | Err(code::EAGAIN) => {}
                     Err(code::ETIMEDOUT) => return Err(ErrorKind::TimedOut),
                     Err(_) => return Err(ErrorKind::Other),

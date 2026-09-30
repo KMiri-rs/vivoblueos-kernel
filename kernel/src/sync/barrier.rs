@@ -40,7 +40,7 @@ impl<const N: usize> ConstBarrier<N> {
             return;
         }
         loop {
-            let _ = atomic_wait(&self.state, n, Tick::MAX);
+            let _ = atomic_wait::atomic_wait(&self.state, n, Tick::MAX);
             n = self.state.load(Ordering::Acquire);
             if n == N {
                 return;

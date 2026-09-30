@@ -553,7 +553,7 @@ impl<T: Sized> TinyArcCas<T> {
     #[inline]
     fn as_mut_ptr(this: &Option<TinyArc<T>>) -> *mut TinyArcInner<T> {
         this.as_ref().map_or(core::ptr::null_mut(), |v| unsafe {
-            TinyArc::inner(v).as_ptr()
+            v.inner.as_ptr()
         })
     }
 
@@ -573,11 +573,13 @@ impl<T: Sized> TinyArcCas<T> {
         }
     }
 
-    pub fn new(inner: Option<TinyArc<T>>) -> Self {
-        match inner {
-            Some(arc) => Self::from_arc(arc),
-            None => Self::default(),
-        }
+    pub const fn new(inner: Option<TinyArc<T>>) -> Self {
+        let ptr = match inner.as_ref() {
+            Some(v) => unsafe { v.inner.as_ptr() },
+            None => core::ptr::null_mut(),
+        };
+        core::mem::forget(inner);
+        Self { inner: AtomicPtr::new(ptr) }
     }
 
     // Why don't we use standard interface? Like

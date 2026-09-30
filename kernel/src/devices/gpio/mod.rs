@@ -150,7 +150,7 @@ impl<T: blueos_hal::gpio::OutputPin> Device for GeneralGpioDevice<T> {
             return Err(ErrorKind::InvalidInput);
         }
 
-        self.set_level(level)?;
+        GeneralGpioDevice::<T>::set_level(self, level)?;
         Ok(buf.len())
     }
 }
