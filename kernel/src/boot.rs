@@ -47,6 +47,7 @@ pub(crate) static mut INIT_HEAP_DONE: bool = false;
 pub(crate) static mut INIT_VFS_DONE: bool = false;
 
 // See https://github.com/rust-lang/rust/pull/134213 for more details about naked function.
+#[cfg(not(all(miri, blueos_miri_boot)))]
 #[no_mangle]
 #[unsafe(naked)]
 pub unsafe extern "C" fn _start() {
@@ -81,7 +82,9 @@ fn init_pin_states<P: blueos_hal::pinctrl::AlterFuncPin>(pin_states: &[&P]) {
     }
 }
 
-extern "C" fn init() {
+pub(crate) extern "C" fn init() {
+    #[cfg(all(miri, blueos_miri_boot))]
+    crate::miri_boot::println(format_args!("BLUEOS_BOOT_ENTER"));
     boards::init();
     init_heap();
     init_runtime();
@@ -124,7 +127,11 @@ extern "C" fn init() {
     #[cfg(enable_vfs)]
     init_vfs();
 
+    #[cfg(all(miri, blueos_miri_boot))]
+    crate::miri_boot::console_ready();
     scheduler::init();
+    #[cfg(all(miri, blueos_miri_boot))]
+    crate::miri_boot::scheduler_ready();
     logger::logger_init();
     time::timer::init();
     #[cfg(kernel_async)]
@@ -163,6 +170,7 @@ pub(crate) fn init_vfs() {
 }
 
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 fn init_bss() {
     unsafe {
         if INIT_BSS_DONE {
@@ -178,7 +186,21 @@ fn init_bss() {
     }
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+fn init_bss() {
+    unsafe {
+        if INIT_BSS_DONE { return; }
+        assert!(!INIT_HEAP_DONE);
+        assert!(!INIT_ARRAY_DONE);
+        assert!(!INIT_VFS_DONE);
+        INIT_BSS_DONE = true;
+    }
+    crate::miri_boot::println(format_args!("BLUEOS_BSS_RUST_INITIAL_VALUES"));
+}
+
+
 #[inline(never)]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) fn run_init_array() {
     unsafe {
         if INIT_ARRAY_DONE {
@@ -193,7 +215,17 @@ pub(crate) fn run_init_array() {
     }
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) fn run_init_array() {
+    // Gate 1 verifies __init_array_start == __init_array_end in the native minimal ELF.
+    assert!(cfg!(blueos_miri_empty_init_array), "constructor-table evidence is required");
+    unsafe { INIT_ARRAY_DONE = true; }
+    crate::miri_boot::println(format_args!("BLUEOS_INIT_ARRAY_EMPTY_VERIFIED"));
+}
+
+
 #[inline(never)]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 fn init_apps() {
     unsafe {
         let mut app = addr_of!(__bk_app_array_start);
@@ -209,7 +241,14 @@ fn init_apps() {
     }
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+fn init_apps() {
+    crate::miri_boot::println(format_args!("BLUEOS_APPS_NOT_LOADED"));
+}
+
+
 #[inline(never)]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) fn init_heap() {
     unsafe {
         if INIT_HEAP_DONE {
@@ -218,4 +257,15 @@ pub(crate) fn init_heap() {
         allocator::init_heap(addr_of_mut!(__heap_start), addr_of_mut!(__heap_end));
         INIT_HEAP_DONE = true;
     }
+}
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) fn init_heap() {
+    unsafe {
+        if INIT_HEAP_DONE { return; }
+        let start = crate::miri_boot::heap_start();
+        allocator::init_heap(start, start.add(crate::miri_boot::HEAP_SIZE));
+        INIT_HEAP_DONE = true;
+    }
+    crate::miri_boot::verify_heap();
 }

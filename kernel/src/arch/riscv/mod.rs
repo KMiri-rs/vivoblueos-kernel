@@ -67,6 +67,7 @@ pub(crate) extern "C" fn claim_switch_context() -> bool {
 }
 
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn local_irq_enabled() -> bool {
     let x: usize;
     unsafe {
@@ -75,6 +76,12 @@ pub(crate) extern "C" fn local_irq_enabled() -> bool {
     };
     x & MSTATUS_MIE != 0
 }
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn local_irq_enabled() -> bool {
+    arch_crate::miri::irq_enabled()
+}
+
 
 #[macro_export]
 macro_rules! arch_bootstrap {
@@ -317,23 +324,45 @@ macro_rules! rv_save_context {
 }
 
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn disable_local_irq() {
     compiler_fence(Ordering::SeqCst);
     unsafe { core::arch::asm!(clear_mstatus_mie!(), options(nostack)) };
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn disable_local_irq() {
+    arch_crate::miri::disable();
+}
+
+
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn enable_local_irq() {
     unsafe { core::arch::asm!(set_mstatus_mie!(), options(nostack)) };
     compiler_fence(Ordering::SeqCst);
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn enable_local_irq() {
+    arch_crate::miri::enable();
+}
+
+
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn idle() {
     unsafe { core::arch::asm!("wfi", options(nostack)) };
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn idle() {
+    arch_crate::miri::idle();
+}
+
+
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn disable_local_irq_save() -> usize {
     compiler_fence(Ordering::SeqCst);
     let old: usize;
@@ -347,7 +376,14 @@ pub(crate) extern "C" fn disable_local_irq_save() -> usize {
     old
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn disable_local_irq_save() -> usize {
+    arch_crate::miri::disable_save()
+}
+
+
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
     unsafe {
         core::arch::asm!("csrw mstatus, {old}", old = in(reg) old,
@@ -356,13 +392,27 @@ pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
     compiler_fence(Ordering::SeqCst);
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
+    arch_crate::miri::restore(old);
+}
+
+
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub extern "C" fn current_sp() -> usize {
     let x: usize;
     unsafe { core::arch::asm!("mv {}, sp", out(reg) x, options(nostack, nomem)) };
     x
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub extern "C" fn current_sp() -> usize {
+    panic!("Miri: reading the hardware stack pointer is unsupported");
+}
+
+
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn ecall_switch_context_with_hook(hook: *mut ContextSwitchHookHolder) {
     unsafe {
         core::arch::asm!(
@@ -373,6 +423,12 @@ pub(crate) extern "C" fn ecall_switch_context_with_hook(hook: *mut ContextSwitch
         )
     }
 }
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn ecall_switch_context_with_hook(hook: *mut ContextSwitchHookHolder) {
+    panic!("Miri: context switching is outside the idle-only experiment");
+}
+
 
 #[inline(always)]
 pub(crate) extern "C" fn switch_context_with_hook(hook: *mut ContextSwitchHookHolder) {
@@ -444,7 +500,8 @@ impl Context {
     }
 
     #[inline]
-    pub(crate) fn __global_pointer() -> usize {
+    #[cfg(not(all(miri, blueos_miri_boot)))]
+pub(crate) fn __global_pointer() -> usize {
         let gp_val: usize;
         unsafe {
             core::arch::asm!("la {}, __global_pointer$", out(reg) gp_val,
@@ -452,6 +509,12 @@ impl Context {
         }
         gp_val
     }
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) fn __global_pointer() -> usize {
+        0 // GP is stored but never executed in this no-switch model.
+}
+
 
     // We are following C-ABI, since Rust ABI is not stabilized.
     // FIXME: rustc miscompiles it if inlined.
@@ -478,6 +541,7 @@ impl Context {
     }
 }
 
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn bootstrap() {
     #[cfg(has_mie)]
     unsafe {
@@ -499,6 +563,13 @@ pub(crate) extern "C" fn bootstrap() {
     };
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn bootstrap() {
+    arch_crate::miri::bootstrap();
+}
+
+
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn start_schedule(cont: extern "C" fn() -> !) {
     let current = crate::scheduler::current_thread_ref();
     current.reset_saved_sp();
@@ -515,7 +586,18 @@ pub(crate) extern "C" fn start_schedule(cont: extern "C" fn() -> !) {
     }
 }
 
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn start_schedule(cont: extern "C" fn() -> !) {
+    let current = crate::scheduler::current_thread_ref();
+    current.reset_saved_sp();
+    assert_ne!(current.saved_sp(), 0);
+    crate::miri_boot::println(format_args!("BLUEOS_START_SCHEDULE_NO_SP_SWITCH"));
+    cont();
+}
+
+
 #[inline(always)]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 pub(crate) extern "C" fn current_cpu_id() -> usize {
     let id: usize;
     unsafe {
@@ -524,6 +606,12 @@ pub(crate) extern "C" fn current_cpu_id() -> usize {
     };
     id
 }
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) extern "C" fn current_cpu_id() -> usize {
+    0
+}
+
 
 #[unsafe(naked)]
 pub(crate) extern "C" fn switch_stack(

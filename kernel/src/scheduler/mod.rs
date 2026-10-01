@@ -324,6 +324,9 @@ pub fn yield_me() {
         return;
     };
     debug_assert_eq!(next.state(), thread::READY);
+    #[cfg(all(miri, blueos_miri_boot))]
+    panic!("Miri: unexpected ready thread would require a context switch");
+    #[cfg(not(all(miri, blueos_miri_boot)))]
     inner_yield(next);
 }
 
@@ -444,10 +447,35 @@ pub extern "C" fn schedule() -> ! {
     READY_CORES.fetch_add(1, Ordering::Relaxed);
     arch::enable_local_irq();
     debug_assert!(arch::local_irq_enabled());
+    #[cfg(all(miri, blueos_miri_boot))]
+    crate::miri_boot::println(format_args!("BLUEOS_SCHEDULE_ENTER"));
+    #[cfg(all(miri, blueos_miri_boot))]
+    let mut iterations = 0;
     loop {
+        #[cfg(all(miri, blueos_miri_boot))]
+        miri_verify_idle_state();
         yield_me();
         idle::get_idle_hook()();
+        #[cfg(all(miri, blueos_miri_boot))]
+        {
+            miri_verify_idle_state();
+            iterations += 1;
+            crate::miri_boot::println(format_args!("BLUEOS_IDLE_ITERATION_{}", iterations));
+            if iterations == 10 {
+                crate::miri_boot::calibrate();
+                crate::miri_boot::done();
+            }
+        }
     }
+}
+
+#[cfg(all(miri, blueos_miri_boot))]
+pub(crate) fn miri_verify_idle_state() {
+    assert!(arch::local_irq_enabled());
+    assert!(next_ready_thread().is_none(), "unexpected ready thread");
+    assert_eq!(Thread::id(current_thread_ref()), Thread::id(idle::current_idle_thread_ref()));
+    assert_eq!(current_thread_ref().state(), thread::RUNNING);
+    assert!(arch::local_irq_enabled(), "IRQ guard failed to restore status");
 }
 
 #[inline]

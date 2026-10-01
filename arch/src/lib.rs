@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #![no_std]
+#[cfg(all(miri, blueos_miri_boot))]
+pub mod miri;
 
 #[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
 pub mod riscv;
