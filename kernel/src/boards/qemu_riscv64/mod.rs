@@ -36,6 +36,7 @@ pub(crate) static PLIC: Plic = Plic::new(config::PLIC_BASE);
 pub use crate::devices::clock::riscv_clock::QemuRiscvClock as ClockImpl;
 
 #[inline]
+#[cfg(not(all(miri, blueos_miri_boot)))]
 fn init_vector_table() {
     unsafe {
         core::arch::asm!(
@@ -47,6 +48,12 @@ fn init_vector_table() {
         );
     }
 }
+
+#[cfg(all(miri, blueos_miri_boot))]
+fn init_vector_table() {
+    arch_crate::miri::VECTOR_INSTALLED.store(true, Ordering::SeqCst);
+}
+
 
 /// FIXME: The serial port of qemu_riscv32 is not working until
 /// we finish the handle_irq function.
