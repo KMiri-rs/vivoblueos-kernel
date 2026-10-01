@@ -565,6 +565,12 @@ where
             panic!("Nil node")
         };
         if !self.is_linked_in_heap(node) {
+            // A fresh (or already removed) timer is neither active nor popped.
+            // Only the first popped node has no predecessor in our popped list.
+            let link = unsafe { MinHeapNode::link_ptr(node) };
+            if unsafe { (*link.as_ptr()).prev.is_none() } && self.popped.next != Some(link) {
+                return None;
+            }
             self.detach_popped(node);
             return Some(IouMinHeapNodeMut {
                 node: None,
@@ -733,6 +739,23 @@ mod tests {
         heap.pop();
         assert!(heap.peek().is_none());
         assert!(heap.remove(high_iou).is_some());
+    }
+
+    #[test]
+    fn test_remove_detached_node() {
+        struct Entry {
+            key: usize,
+            node: MinHeapNode<Entry, EntryAdapter>,
+        }
+        impl_simple_intrusive_adapter!(EntryAdapter, Entry, node);
+        let mut heap = MinHeap::<Entry, EntryAdapter, _>::new(|a, b| a.key.cmp(&b.key));
+        let mut entry = Entry { key: 7, node: MinHeapNode::new() };
+        assert!(heap.remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) }).is_none());
+        let iou = heap.push(&mut entry).unwrap();
+        heap.pop();
+        assert!(heap.remove(iou).is_some());
+        assert!(heap.remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) }).is_none());
+        assert_eq!(heap.size(), 0);
     }
 
     #[test]
