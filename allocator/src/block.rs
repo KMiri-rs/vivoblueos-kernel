@@ -76,18 +76,21 @@ impl BlockHdr {
     ///
     /// # Safety
     ///
-    /// `self` must have a next block (it must not be the sentinel block in a
-    /// pool).
+    /// `block` must have allocation-wide writable provenance and a next block
+    /// in the same allocation (it must not be the sentinel block in a pool).
+    /// Do not derive `block` from a reference covering only the current header.
     #[inline]
-    pub unsafe fn next_phys_block(&self) -> NonNull<BlockHdr> {
+    pub unsafe fn next_phys_block(block: NonNull<BlockHdr>) -> NonNull<BlockHdr> {
+        let size = core::ptr::addr_of!((*block.as_ptr()).size).read();
         debug_assert!(
-            (self.size & SIZE_SENTINEL) == 0,
+            (size & SIZE_SENTINEL) == 0,
             "`self` must not be a sentinel"
         );
 
         // Safety: Since `self.size & SIZE_LAST_IN_POOL` is not lying, the
         //         next block should exist at a non-null location.
-        NonNull::new_unchecked((self as *const _ as *mut u8).add(self.size & SIZE_SIZE_MASK)).cast()
+        // Preserve the pool's raw-pointer provenance instead of a header-only `&self` tag.
+        NonNull::new_unchecked(block.as_ptr().cast::<u8>().add(size & SIZE_SIZE_MASK)).cast()
     }
 }
 
