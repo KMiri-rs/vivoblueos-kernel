@@ -54,6 +54,11 @@ pub struct TinyArcInner<T: Sized> {
 }
 
 impl<T: Sized> TinyArcInner<T> {
+    /// Access exclusively owned data before publishing a shared TinyArc.
+    pub fn get_mut(&mut self) -> &mut T {
+        &mut self.data
+    }
+
     pub const fn new(data: T) -> Self {
         Self {
             data,
