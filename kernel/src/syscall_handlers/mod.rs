@@ -833,7 +833,7 @@ define_syscall_handler!(
 
 define_syscall_handler!(
     ioctl(fd: c_int, request: c_ulong, out: *mut core::ffi::c_void) -> c_int {
-        vfs_syscalls::ioctl(fd, request as u32, out)
+        vfs_syscalls::ioctl(fd, request as _, out)
     }
 );
 
