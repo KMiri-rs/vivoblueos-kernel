@@ -198,4 +198,22 @@ mod tests {
         let r = l.read();
         assert_eq!(*r, 42);
     }
+
+    #[test]
+    fn test_static_publication() {
+        use crate::tinyarc::{TinyArc, TinyArcInner};
+        use core::{mem::MaybeUninit, ptr::NonNull};
+
+        static mut SLOT: MaybeUninit<TinyArcInner<u64>> = MaybeUninit::uninit();
+        unsafe {
+            let slot = (&raw mut SLOT).cast::<TinyArcInner<u64>>();
+            slot.write(TinyArcInner::new(17));
+            // Publish a shared TinyArc over the static storage, then mutate it.
+            let mut arc = TinyArc::from_inner(NonNull::new_unchecked(slot));
+            *TinyArc::get_mut_unchecked(&mut arc) = 42;
+            assert_eq!(*arc, 42);
+            // Static storage must not be passed to Box::drop on unwind.
+            core::mem::forget(arc);
+        }
+    }
 }
