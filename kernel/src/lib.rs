@@ -20,7 +20,6 @@
 #![feature(alloc_error_handler)]
 #![feature(allocator_api)]
 #![feature(associated_type_defaults)]
-#![feature(box_as_ptr)]
 #![feature(c_size_t)]
 #![feature(c_variadic)]
 #![feature(const_trait_impl)]
