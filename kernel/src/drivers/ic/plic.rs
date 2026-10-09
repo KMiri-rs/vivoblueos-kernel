@@ -27,18 +27,26 @@ impl Plic {
         }
     }
 
+    #[inline]
+    fn register_base(&self) -> *mut u32 {
+        #[cfg(miri)]
+        { core::ptr::with_exposed_provenance_mut(self.base as usize) }
+        #[cfg(not(miri))]
+        { self.base }
+    }
+
     pub fn init(&self) {}
 
     pub fn set_priority(&self, irq: u32, prio: u32) {
         debug_assert!(irq > 0);
-        unsafe { self.base.offset(irq as isize).write_volatile(prio) };
+        unsafe { self.register_base().offset(irq as isize).write_volatile(prio) };
     }
 
     pub fn enable(&self, cpu_id: usize, irq: u32) {
         let hart = cpu_id as isize;
         unsafe {
             let ptr = self
-                .base
+                .register_base()
                 .byte_offset(0x2000)
                 .byte_offset(hart * 0x80)
                 .offset(irq as isize / 32);
@@ -51,7 +59,7 @@ impl Plic {
         let hart = cpu_id as isize;
         unsafe {
             let ptr = self
-                .base
+                .register_base()
                 .byte_offset(0x2000)
                 .byte_offset(hart * 0x80)
                 .offset(irq as isize / 32);
@@ -63,7 +71,7 @@ impl Plic {
     pub fn claim(&self, cpu_id: usize) -> u32 {
         let hart = cpu_id as isize;
         unsafe {
-            self.base
+            self.register_base()
                 .byte_offset(0x20_0004)
                 .byte_offset(hart * 0x1000)
                 .read_volatile()
@@ -73,7 +81,7 @@ impl Plic {
     pub fn complete(&self, cpu_id: usize, irq: u32) {
         let hart = cpu_id as isize;
         unsafe {
-            self.base
+            self.register_base()
                 .byte_offset(0x20_0004)
                 .byte_offset(hart * 0x1000)
                 .write_volatile(irq)
@@ -83,7 +91,7 @@ impl Plic {
     pub fn set_threshold(&self, cpu_id: usize, val: u32) {
         let hart = cpu_id as isize;
         unsafe {
-            self.base
+            self.register_base()
                 .byte_offset(0x20_0000)
                 .byte_offset(hart * 0x1000)
                 .write_volatile(val);

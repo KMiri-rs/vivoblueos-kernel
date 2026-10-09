@@ -13,9 +13,11 @@
 // limitations under the License.
 
 mod config;
+#[cfg(not(miri))]
+use crate::arch::trap_entry;
 use crate::{
     arch,
-    arch::riscv::{local_irq_enabled, trap_entry, Context},
+    arch::{local_irq_enabled, Context},
     scheduler, time,
 };
 use blueos_driver::{

@@ -20,9 +20,11 @@
 // SPDX-License-Identifier: MIT
 
 mod config;
+#[cfg(not(miri))]
+use crate::arch::trap_entry;
 use crate::{
     arch,
-    arch::riscv::{local_irq_enabled, trap_entry, Context},
+    arch::{local_irq_enabled, Context},
     drivers::{ic::plic::Plic, msip::Msip},
     scheduler,
     support::SmpStagedInit,

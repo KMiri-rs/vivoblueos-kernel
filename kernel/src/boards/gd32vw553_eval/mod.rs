@@ -19,11 +19,14 @@
 // Copyright (c) 2024 - present Microsoft Corporation
 // SPDX-License-Identifier: MIT
 
+#[cfg(not(miri))]
+use crate::arch::trap_entry;
 use crate::{
     allocator,
     arch::{
         self,
-        riscv::{local_irq_enabled, trap_entry, Context},
+        local_irq_enabled,
+        Context,
     },
     devices::clock::riscv_clock::RiscvClock,
     drivers::msip::Msip,

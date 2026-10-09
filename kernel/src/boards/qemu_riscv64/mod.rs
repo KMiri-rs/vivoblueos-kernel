@@ -20,9 +20,11 @@
 // SPDX-License-Identifier: MIT
 
 mod config;
+#[cfg(not(miri))]
+use crate::arch::trap_entry;
 use crate::{
     arch,
-    arch::riscv::{local_irq_enabled, trap_entry, Context},
+    arch::{local_irq_enabled, Context},
     drivers::{ic::plic::Plic, msip::Msip},
     scheduler,
     support::SmpStagedInit,
@@ -36,6 +38,7 @@ pub(crate) static PLIC: Plic = Plic::new(config::PLIC_BASE);
 pub use crate::devices::clock::riscv_clock::QemuRiscvClock as ClockImpl;
 
 #[inline]
+#[cfg(not(miri))]
 fn init_vector_table() {
     unsafe {
         core::arch::asm!(
@@ -47,6 +50,12 @@ fn init_vector_table() {
         );
     }
 }
+
+#[cfg(miri)]
+fn init_vector_table() {
+    arch_crate::VECTOR_INSTALLED.store(true, Ordering::SeqCst);
+}
+
 
 /// FIXME: The serial port of qemu_riscv32 is not working until
 /// we finish the handle_irq function.
