@@ -26,3 +26,8 @@ pub use riscv::*;
 pub mod aarch64;
 #[cfg(target_arch = "aarch64")]
 pub use aarch64::*;
+
+#[cfg(miri)]
+pub mod miri;
+#[cfg(miri)]
+pub use miri::*;

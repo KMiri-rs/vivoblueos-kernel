@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![no_std]
-#![cfg_attr(all(miri, blueos_miri_boot), no_main)]
+#![cfg_attr(miri, no_main)]
 #![allow(internal_features)]
 #![allow(incomplete_features)]
 #![allow(clippy::crate_in_macro_def)]
@@ -46,7 +46,7 @@
 // blueos_test_macro::test_only!();
 
 extern crate alloc;
-#[cfg(all(miri, blueos_miri_boot))]
+#[cfg(miri)]
 mod miri_boot;
 pub mod allocator;
 pub mod arch;

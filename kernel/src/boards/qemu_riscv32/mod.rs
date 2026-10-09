@@ -22,7 +22,7 @@
 mod config;
 use crate::{
     arch,
-    arch::riscv::{local_irq_enabled, trap_entry, Context},
+    arch::{local_irq_enabled, riscv::{trap_entry, Context}},
     drivers::{ic::plic::Plic, msip::Msip},
     scheduler,
     support::SmpStagedInit,

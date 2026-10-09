@@ -23,7 +23,8 @@ use crate::{
     allocator,
     arch::{
         self,
-        riscv::{local_irq_enabled, trap_entry, Context},
+        local_irq_enabled,
+        riscv::{trap_entry, Context},
     },
     devices::clock::riscv_clock::RiscvClock,
     drivers::msip::Msip,

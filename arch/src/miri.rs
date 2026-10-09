@@ -9,4 +9,24 @@ pub fn disable() { MSTATUS.fetch_and(!MIE, Ordering::SeqCst); }
 pub fn enable() { MSTATUS.fetch_or(MIE, Ordering::SeqCst); }
 pub fn disable_save() -> usize { MSTATUS.fetch_and(!MIE, Ordering::SeqCst) }
 pub fn restore(old: usize) { MSTATUS.store(old, Ordering::SeqCst); }
-pub fn idle() { assert!(irq_enabled(), "idle with IRQ disabled"); }
+pub extern "C" fn idle() { assert!(irq_enabled(), "idle with IRQ disabled"); }
+
+pub extern "C" fn local_irq_enabled() -> bool {
+    crate::miri::irq_enabled()
+}
+
+pub extern "C" fn disable_local_irq() {
+    crate::miri::disable();
+}
+
+pub extern "C" fn enable_local_irq() {
+    crate::miri::enable();
+}
+
+pub extern "C" fn disable_local_irq_save() -> usize {
+    crate::miri::disable_save()
+}
+
+pub extern "C" fn enable_local_irq_restore(old: usize) {
+    crate::miri::restore(old);
+}

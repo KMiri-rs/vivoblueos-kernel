@@ -14,6 +14,9 @@
 
 pub(crate) mod irq;
 
+#[cfg(miri)]
+use super::miri::*;
+
 use core::{
     cell::Cell,
     mem::offset_of,
@@ -63,7 +66,7 @@ pub(crate) extern "C" fn claim_switch_context() -> bool {
 }
 
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn local_irq_enabled() -> bool {
     let x: usize;
     unsafe {
@@ -72,12 +75,6 @@ pub extern "C" fn local_irq_enabled() -> bool {
     };
     x & MSTATUS_MIE != 0
 }
-
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn local_irq_enabled() -> bool {
-    crate::miri::irq_enabled()
-}
-
 
 #[macro_export]
 macro_rules! arch_bootstrap {
@@ -322,45 +319,27 @@ macro_rules! rv_save_context {
 }
 
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn disable_local_irq() {
     compiler_fence(Ordering::SeqCst);
     unsafe { core::arch::asm!(clear_mstatus_mie!(), options(nostack)) };
 }
 
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn disable_local_irq() {
-    crate::miri::disable();
-}
-
-
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn enable_local_irq() {
     unsafe { core::arch::asm!(set_mstatus_mie!(), options(nostack)) };
     compiler_fence(Ordering::SeqCst);
 }
 
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn enable_local_irq() {
-    crate::miri::enable();
-}
-
-
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn idle() {
     unsafe { core::arch::asm!("wfi", options(nostack)) };
 }
 
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn idle() {
-    crate::miri::idle();
-}
-
-
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn disable_local_irq_save() -> usize {
     compiler_fence(Ordering::SeqCst);
     let old: usize;
@@ -374,14 +353,8 @@ pub extern "C" fn disable_local_irq_save() -> usize {
     old
 }
 
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn disable_local_irq_save() -> usize {
-    crate::miri::disable_save()
-}
-
-
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 pub extern "C" fn enable_local_irq_restore(old: usize) {
     unsafe {
         core::arch::asm!("csrw mstatus, {old}", old = in(reg) old,
@@ -389,12 +362,6 @@ pub extern "C" fn enable_local_irq_restore(old: usize) {
     };
     compiler_fence(Ordering::SeqCst);
 }
-
-#[cfg(all(miri, blueos_miri_boot))]
-pub extern "C" fn enable_local_irq_restore(old: usize) {
-    crate::miri::restore(old);
-}
-
 
 #[inline]
 pub extern "C" fn current_sp() -> usize {
@@ -518,6 +485,7 @@ impl Context {
     }
 }
 
+#[cfg(not(miri))]
 pub(crate) extern "C" fn bootstrap() {
     #[cfg(has_mie)]
     unsafe {

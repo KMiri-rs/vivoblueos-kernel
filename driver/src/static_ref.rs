@@ -72,7 +72,7 @@ impl<T> Deref for StaticRef<T> {
     fn deref(&self) -> &T {
         // SAFETY: `ptr` is aligned and dereferenceable for the program duration
         // as promised by the caller of `StaticRef::new`.
-        #[cfg(all(miri, blueos_miri_boot))]
+        #[cfg(miri)]
         if self.ptr.as_ptr() as usize == 0x10000000 {
             // Only the modeled qemu UART: recover runtime backing provenance for
             // the const-created address. Ordinary Rust pointers retain their tags.

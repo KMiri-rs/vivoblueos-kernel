@@ -22,7 +22,7 @@
 mod config;
 use crate::{
     arch,
-    arch::riscv::{local_irq_enabled, trap_entry, Context},
+    arch::{local_irq_enabled, riscv::{trap_entry, Context}},
     drivers::{ic::plic::Plic, msip::Msip},
     scheduler,
     support::SmpStagedInit,
@@ -36,7 +36,7 @@ pub(crate) static PLIC: Plic = Plic::new(config::PLIC_BASE);
 pub use crate::devices::clock::riscv_clock::QemuRiscvClock as ClockImpl;
 
 #[inline]
-#[cfg(not(all(miri, blueos_miri_boot)))]
+#[cfg(not(miri))]
 fn init_vector_table() {
     unsafe {
         core::arch::asm!(
@@ -49,7 +49,7 @@ fn init_vector_table() {
     }
 }
 
-#[cfg(all(miri, blueos_miri_boot))]
+#[cfg(miri)]
 fn init_vector_table() {
     arch_crate::miri::VECTOR_INSTALLED.store(true, Ordering::SeqCst);
 }

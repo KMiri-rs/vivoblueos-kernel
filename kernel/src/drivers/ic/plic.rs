@@ -29,9 +29,9 @@ impl Plic {
 
     #[inline]
     fn register_base(&self) -> *mut u32 {
-        #[cfg(all(miri, blueos_miri_boot))]
+        #[cfg(miri)]
         { core::ptr::with_exposed_provenance_mut(self.base as usize) }
-        #[cfg(not(all(miri, blueos_miri_boot)))]
+        #[cfg(not(miri))]
         { self.base }
     }
 

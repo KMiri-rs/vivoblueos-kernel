@@ -1,28 +1,15 @@
 //! Experimental startup adapter: no applications, interrupts or context switches.
-use core::{alloc::{GlobalAlloc, Layout}, fmt::{self, Write}, sync::atomic::Ordering};
+use core::{alloc::{GlobalAlloc, Layout}, sync::atomic::Ordering};
 pub(crate) const HEAP_SIZE: usize = 8 * 1024 * 1024;
 #[global_allocator]
 static GLOBAL: crate::allocator::KernelAllocator = crate::allocator::KernelAllocator;
-unsafe extern "Rust" { fn miri_write_to_stdout(bytes: &[u8]); }
 unsafe extern "C" {
     #[link_name = "exit"] fn interpreter_exit(code: i32) -> !;
     fn abort() -> !;
 }
-struct Output;
-impl Write for Output {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        unsafe { miri_write_to_stdout(s.as_bytes()); }
-        Ok(())
-    }
-}
-pub(crate) fn println(args: fmt::Arguments<'_>) {
-    let mut out = Output;
-    out.write_fmt(args).unwrap();
-    out.write_str("\n").unwrap();
-}
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
-    println(format_args!("BLUEOS_MIRI_PANIC: {}", info));
+    blueos_infra::miri_println!("BLUEOS_MIRI_PANIC: {}", info);
     unsafe { abort() }
 }
 #[alloc_error_handler]
@@ -40,7 +27,7 @@ pub(crate) fn verify_heap() {
         for i in 0..64 { assert_eq!(p.add(i).read(), i as u8); }
         GLOBAL.dealloc(p, layout);
     }
-    println(format_args!("BLUEOS_HEAP_READY"));
+    blueos_infra::miri_println!("BLUEOS_HEAP_READY");
 }
 pub(crate) fn console_ready() {
     assert!(arch_crate::miri::VECTOR_INSTALLED.load(Ordering::SeqCst));
@@ -51,13 +38,13 @@ pub(crate) fn console_ready() {
         assert_eq!((0x0c000028 as *const u32).read_volatile(), 1);
         assert_ne!((0x0c002000 as *const u32).read_volatile() & (1 << 10), 0);
     }
-    println(format_args!("BLUEOS_CONSOLE_READY"));
+    blueos_infra::miri_println!("BLUEOS_CONSOLE_READY");
 }
 pub(crate) fn scheduler_ready() {
     assert_eq!(crate::thread::Thread::id(crate::scheduler::current_thread_ref()),
                crate::thread::Thread::id(crate::scheduler::current_idle_thread_ref()));
     assert_eq!(crate::scheduler::current_thread_ref().state(), crate::thread::RUNNING);
-    println(format_args!("BLUEOS_SCHEDULER_READY"));
+    blueos_infra::miri_println!("BLUEOS_SCHEDULER_READY");
 }
 #[inline(never)]
 pub(crate) fn calibrate() {
@@ -71,14 +58,14 @@ pub(crate) fn done() -> ! {
         assert!(crate::boot::INIT_HEAP_DONE);
         assert!(crate::boot::INIT_ARRAY_DONE);
     }
-    println(format_args!("BLUEOS_MIRI_DONE"));
+    blueos_infra::miri_println!("BLUEOS_MIRI_DONE");
     // The boot singleton objects remain live; this does not validate absence of leaks.
     unsafe { interpreter_exit(0) }
 }
 #[unsafe(no_mangle)]
 fn miri_start(_: isize, _: *const *const u8) -> isize {
     assert_eq!(blueos_kconfig::CONFIG_NUM_CORES, 1);
-    println(format_args!("BLUEOS_MIRI_ENTRY"));
+    blueos_infra::miri_println!("BLUEOS_MIRI_ENTRY");
     unsafe {
         // Real backing allocations for the modeled MMIO register ranges are in boot.toml.
         let uart = 0x10000000 as *mut u8;
