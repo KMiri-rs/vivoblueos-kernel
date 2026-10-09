@@ -14,9 +14,9 @@
 
 pub(crate) mod irq;
 
-#[cfg(miri)]
-use super::miri::*;
 mod trap;
+mod context;
+pub(crate) use context::*;
 
 use crate::{boards, irq as sysirq, scheduler, scheduler::ContextSwitchHookHolder};
 use core::{
@@ -70,7 +70,6 @@ pub(crate) extern "C" fn claim_switch_context() -> bool {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn local_irq_enabled() -> bool {
     let x: usize;
     unsafe {
@@ -321,27 +320,23 @@ macro_rules! rv_save_context {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn disable_local_irq() {
     compiler_fence(Ordering::SeqCst);
     unsafe { core::arch::asm!(clear_mstatus_mie!(), options(nostack)) };
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn enable_local_irq() {
     unsafe { core::arch::asm!(set_mstatus_mie!(), options(nostack)) };
     compiler_fence(Ordering::SeqCst);
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn idle() {
     unsafe { core::arch::asm!("wfi", options(nostack)) };
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn disable_local_irq_save() -> usize {
     compiler_fence(Ordering::SeqCst);
     let old: usize;
@@ -356,7 +351,6 @@ pub(crate) extern "C" fn disable_local_irq_save() -> usize {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
     unsafe {
         core::arch::asm!("csrw mstatus, {old}", old = in(reg) old,
@@ -366,14 +360,12 @@ pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn current_sp() -> usize {
     let x: usize;
     unsafe { core::arch::asm!("mv {}, sp", out(reg) x, options(nostack, nomem)) };
     x
 }
 
-#[cfg(not(miri))]
 pub(crate) extern "C" fn ecall_switch_context_with_hook(hook: *mut ContextSwitchHookHolder) {
     unsafe {
         core::arch::asm!(
@@ -397,65 +389,8 @@ pub(crate) extern "C" fn restore_context_with_hook(hook: *mut ContextSwitchHookH
     unreachable!("Should have switched to another thread");
 }
 
-// This context is used when we are performing context switching in
-// thread mode or in the first level ISR.
-#[cfg_attr(target_pointer_width = "64", repr(C, align(16)))]
-#[cfg_attr(target_pointer_width = "32", repr(C, align(8)))]
-#[derive(Default, Debug)]
-pub(crate) struct Context {
-    pub ra: usize,
-    pub mepc: usize,
-    pub gp: usize,
-    pub tp: usize,
-    pub t0: usize,
-    pub t1: usize,
-    pub t2: usize,
-    pub fp: usize,
-    pub a0: usize,
-    pub a1: usize,
-    pub a2: usize,
-    pub a3: usize,
-    pub a4: usize,
-    pub a5: usize,
-    pub a6: usize,
-    pub a7: usize,
-    pub t3: usize,
-    pub t4: usize,
-    pub t5: usize,
-    pub t6: usize,
-    pub s1: usize,
-    pub s2: usize,
-    pub s3: usize,
-    pub s4: usize,
-    pub s5: usize,
-    pub s6: usize,
-    pub s7: usize,
-    pub s8: usize,
-    pub s9: usize,
-    pub s10: usize,
-    pub s11: usize,
-    // So that it's 16-byte aligned.
-    pub padding: usize,
-}
-
-#[repr(C, align(16))]
-#[derive(Default, Debug)]
-pub(crate) struct IsrContext {
-    pub mstatus: usize,
-    pub mcause: usize,
-    pub mtval: usize,
-    pub mepc: usize,
-}
-
 impl Context {
     #[inline]
-    pub(crate) fn init(&mut self) -> &mut Self {
-        self.gp = Self::__global_pointer();
-        self
-    }
-
-    #[inline]
-    #[cfg(not(miri))]
     pub(crate) fn __global_pointer() -> usize {
         let gp_val: usize;
         unsafe {
@@ -464,33 +399,8 @@ impl Context {
         }
         gp_val
     }
-
-    // We are following C-ABI, since Rust ABI is not stabilized.
-    // FIXME: rustc miscompiles it if inlined.
-    #[inline(never)]
-    pub(crate) fn set_return_address(&mut self, pc: usize) -> &mut Self {
-        self.mepc = pc;
-        self
-    }
-
-    #[inline(never)]
-    pub(crate) fn set_arg(&mut self, index: usize, val: usize) -> &mut Self {
-        match index {
-            0 => self.a0 = val,
-            1 => self.a1 = val,
-            2 => self.a2 = val,
-            3 => self.a3 = val,
-            4 => self.a4 = val,
-            5 => self.a5 = val,
-            6 => self.a6 = val,
-            7 => self.a7 = val,
-            _ => {}
-        }
-        self
-    }
 }
 
-#[cfg(not(miri))]
 pub(crate) extern "C" fn bootstrap() {
     #[cfg(has_mie)]
     unsafe {
@@ -512,7 +422,6 @@ pub(crate) extern "C" fn bootstrap() {
     };
 }
 
-#[cfg(not(miri))]
 pub(crate) extern "C" fn start_schedule(cont: extern "C" fn() -> !) {
     let current = crate::scheduler::current_thread_ref();
     current.reset_saved_sp();
@@ -530,7 +439,6 @@ pub(crate) extern "C" fn start_schedule(cont: extern "C" fn() -> !) {
 }
 
 #[inline(always)]
-#[cfg(not(miri))]
 pub(crate) extern "C" fn current_cpu_id() -> usize {
     let id: usize;
     unsafe {

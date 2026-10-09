@@ -18,7 +18,7 @@ pub mod miri;
 #[cfg(miri)]
 pub use miri::*;
 
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(any(target_arch = "riscv64", target_arch = "riscv32"), not(miri)))]
 pub mod riscv;
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(any(target_arch = "riscv64", target_arch = "riscv32"), not(miri)))]
 pub use riscv::*;

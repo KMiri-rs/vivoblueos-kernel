@@ -20,9 +20,11 @@
 // SPDX-License-Identifier: MIT
 
 mod config;
+#[cfg(not(miri))]
+use crate::arch::trap_entry;
 use crate::{
     arch,
-    arch::{local_irq_enabled, riscv::{trap_entry, Context}},
+    arch::{local_irq_enabled, Context},
     drivers::{ic::plic::Plic, msip::Msip},
     scheduler,
     support::SmpStagedInit,
@@ -51,7 +53,7 @@ fn init_vector_table() {
 
 #[cfg(miri)]
 fn init_vector_table() {
-    arch_crate::miri::VECTOR_INSTALLED.store(true, Ordering::SeqCst);
+    arch_crate::VECTOR_INSTALLED.store(true, Ordering::SeqCst);
 }
 
 

@@ -30,7 +30,7 @@ pub(crate) fn verify_heap() {
     blueos_infra::miri_println!("BLUEOS_HEAP_READY");
 }
 pub(crate) fn console_ready() {
-    assert!(arch_crate::miri::VECTOR_INSTALLED.load(Ordering::SeqCst));
+    assert!(arch_crate::VECTOR_INSTALLED.load(Ordering::SeqCst));
     assert!(crate::devices::DeviceManager::get().get_char_device("ttyS0").is_some());
     let _console = crate::devices::console::get_console();
     unsafe {

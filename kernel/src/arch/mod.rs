@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", not(miri)))]
 pub mod arm;
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", not(miri)))]
 pub use arm::*;
 
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(any(target_arch = "riscv64", target_arch = "riscv32"), not(miri)))]
 pub mod riscv;
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(any(target_arch = "riscv64", target_arch = "riscv32"), not(miri)))]
 pub use riscv::*;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(miri)))]
 pub mod aarch64;
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(miri)))]
 pub use aarch64::*;
 
 #[cfg(miri)]

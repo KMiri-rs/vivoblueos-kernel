@@ -14,9 +14,6 @@
 
 pub(crate) mod irq;
 
-#[cfg(miri)]
-use super::miri::*;
-
 use core::{
     cell::Cell,
     mem::offset_of,
@@ -66,7 +63,6 @@ pub(crate) extern "C" fn claim_switch_context() -> bool {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn local_irq_enabled() -> bool {
     let x: usize;
     unsafe {
@@ -319,27 +315,23 @@ macro_rules! rv_save_context {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn disable_local_irq() {
     compiler_fence(Ordering::SeqCst);
     unsafe { core::arch::asm!(clear_mstatus_mie!(), options(nostack)) };
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn enable_local_irq() {
     unsafe { core::arch::asm!(set_mstatus_mie!(), options(nostack)) };
     compiler_fence(Ordering::SeqCst);
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn idle() {
     unsafe { core::arch::asm!("wfi", options(nostack)) };
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn disable_local_irq_save() -> usize {
     compiler_fence(Ordering::SeqCst);
     let old: usize;
@@ -354,7 +346,6 @@ pub extern "C" fn disable_local_irq_save() -> usize {
 }
 
 #[inline]
-#[cfg(not(miri))]
 pub extern "C" fn enable_local_irq_restore(old: usize) {
     unsafe {
         core::arch::asm!("csrw mstatus, {old}", old = in(reg) old,
@@ -485,7 +476,6 @@ impl Context {
     }
 }
 
-#[cfg(not(miri))]
 pub(crate) extern "C" fn bootstrap() {
     #[cfg(has_mie)]
     unsafe {
