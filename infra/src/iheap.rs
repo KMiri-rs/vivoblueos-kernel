@@ -749,12 +749,19 @@ mod tests {
         }
         impl_simple_intrusive_adapter!(EntryAdapter, Entry, node);
         let mut heap = MinHeap::<Entry, EntryAdapter, _>::new(|a, b| a.key.cmp(&b.key));
-        let mut entry = Entry { key: 7, node: MinHeapNode::new() };
-        assert!(heap.remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) }).is_none());
+        let mut entry = Entry {
+            key: 7,
+            node: MinHeapNode::new(),
+        };
+        assert!(heap
+            .remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) })
+            .is_none());
         let iou = heap.push(&mut entry).unwrap();
         heap.pop();
         assert!(heap.remove(iou).is_some());
-        assert!(heap.remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) }).is_none());
+        assert!(heap
+            .remove(unsafe { IouMinHeapNodeMut::from_mut(&mut entry) })
+            .is_none());
         assert_eq!(heap.size(), 0);
     }
 
