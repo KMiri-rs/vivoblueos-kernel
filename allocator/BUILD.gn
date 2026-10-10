@@ -13,7 +13,19 @@
 # limitations under the License.
 
 import("//build/templates/build_template.gni")
+import("//build/templates/miri.gni")
 import("//build/toolchain/blueos.gni")
+
+declare_args() {
+  # Filter allocator miri tests by name; empty means run all tests.
+  # e.g. `make miri_test_allocator CASE=tlsf_insert_alloc_dealloc_roundtrip`
+  allocator_miri_test_case = ""
+}
+
+group("check_allocator_by_miri") {
+  testonly = true
+  deps = [ ":allocator_miri_test" ]
+}
 
 build_rust("allocator_crate") {
   crate_type = "rlib"
@@ -28,4 +40,17 @@ build_rust("allocator_crate") {
     "//kernel/kconfig:generate_rustflags_file",
   ]
   configs += [ "//kernel/kconfig:kconfigs" ]
+}
+
+miri_test("allocator_miri_test") {
+  crate = "src/lib.rs"
+  deps = [ ":allocator_crate" ]
+
+  test_name = allocator_miri_test_case
+  extra_miri_flags = miri_flags
+  extra_miri_flags += [
+    "-Aunsafe_op_in_unsafe_fn",
+    "-Aunused",
+    "--cfg=disable_weak_symbol"
+  ]
 }

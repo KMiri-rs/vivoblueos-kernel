@@ -180,6 +180,7 @@ pub unsafe extern "C" fn strncpy(s1: *mut c_char, s2: *const c_char, n: c_size_t
 /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/strlen.html>.
 #[linkage = "weak"]
 #[unsafe(no_mangle)]
+#[cfg(not(disable_weak_symbol))]
 pub unsafe extern "C" fn strlen(s: *const c_char) -> c_size_t {
     unsafe { NulTerminated::new(s) }.count()
 }

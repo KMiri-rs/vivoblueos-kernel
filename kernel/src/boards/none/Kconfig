@@ -1,0 +1,11 @@
+# Host-side virtual board ("none").
+#
+# Used by host builds such as the miri tests (`make miri_test`,
+# `make miri_test_allocator`), where code is compiled for the host
+# machine and interpreted by miri instead of running on real hardware.
+# There is no SoC here, so this Kconfig intentionally selects no
+# architecture.
+
+config SOC_NONE
+    bool "Host-side virtual board (miri tests)"
+    default y
