@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 
@@ -23,6 +23,9 @@ pub mod slab;
 pub mod support;
 pub mod tlsf;
 pub mod tlsf_int;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Default, Debug)]
 pub struct MemoryInfo {

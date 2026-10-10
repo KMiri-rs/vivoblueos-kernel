@@ -35,11 +35,12 @@ impl Heap {
 
     // Initializes the heap
     pub unsafe fn init(&self, start_addr: usize, size: usize) {
-        let block: &[u8] = core::slice::from_raw_parts(start_addr as *const u8, size);
+        let block =
+            NonNull::slice_from_raw_parts(NonNull::new_unchecked(start_addr as *mut u8), size);
         let mut heap = self.heap.irqsave_lock();
         #[cfg(debugging_allocator)]
         debug_assert!(!heap.is_inited());
-        heap.insert_free_block_ptr(block.into());
+        heap.insert_free_block_ptr(block);
     }
 
     // try to allocate memory with the given layout
