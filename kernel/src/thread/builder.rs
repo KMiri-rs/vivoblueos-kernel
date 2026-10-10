@@ -192,12 +192,11 @@ pub fn build_static_thread(
     entry: Entry,
     kind: ThreadKind,
 ) -> ThreadNode {
-    let inner = &s.arc;
+    // The storage is exclusively borrowed and has not been published. Initialize
+    // through that borrow rather than deriving &mut Thread from an intrusive lock.
+    let irq_guard = crate::support::DisableInterruptGuard::new();
     let stack = &mut s.stack;
-    let arc = unsafe { ThreadNode::from_static_inner_ref(inner) };
-    debug_assert_eq!(ThreadNode::strong_count(&arc), 1);
-    let _id = Thread::id(&arc);
-    let mut w = arc.lock();
+    let w = s.arc.get_mut();
     let Some(stack) = Stack::from_raw(stack.rep.as_mut_ptr(), stack.rep.len()) else {
         panic!("Invalid stack");
     };
@@ -215,7 +214,13 @@ pub fn build_static_thread(
         stack.rep.len(),
         core::mem::size_of::<arch::Context>(),
     );
-    drop(w);
+    // This mutable static storage is initialized exclusively above. Keep its
+    // writable raw provenance; from_static_inner_ref would freeze non-cell fields
+    // before the global intrusive list registers this thread.
+    let arc = unsafe { ThreadNode::from_inner(core::ptr::NonNull::new_unchecked(&raw mut s.arc)) };
+    debug_assert_eq!(ThreadNode::strong_count(&arc), 1);
+    let _id = Thread::id(&arc);
+    drop(irq_guard);
     t.write(arc.clone());
     GlobalQueueVisitor::add(arc.clone());
     arc

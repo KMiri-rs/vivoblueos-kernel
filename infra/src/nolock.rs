@@ -198,4 +198,72 @@ mod tests {
         let r = l.read();
         assert_eq!(*r, 42);
     }
+
+    #[test]
+    fn test_static_publication() {
+        use crate::tinyarc::{TinyArc, TinyArcInner};
+        use core::{mem::MaybeUninit, ptr::NonNull};
+
+        static mut SLOT: MaybeUninit<TinyArcInner<u64>> = MaybeUninit::uninit();
+        unsafe {
+            let slot = (&raw mut SLOT).cast::<TinyArcInner<u64>>();
+            slot.write(TinyArcInner::new(17));
+            // Publish a shared TinyArc over the static storage, then mutate it.
+            let mut arc = TinyArc::from_inner(NonNull::new_unchecked(slot));
+            *TinyArc::get_mut_unchecked(&mut arc) = 42;
+            assert_eq!(*arc, 42);
+            // Static storage must not be passed to Box::drop on unwind.
+            core::mem::forget(arc);
+        }
+    }
+
+    // `INoLock::this_mut` computes its owning struct's address by subtracting
+    // an adapter offset from `self`, then retags it `Unique`. This is only sound
+    // when the owner is reached through a reference that still carries exclusive
+    // (`Unique`) provenance. When the lock is an intrusive, zero-sized field of
+    // a struct in static storage that was published through a *shared* reference
+    // (as `ThreadNode::from_static_inner_ref` used to do), the `Unique` retag
+    // fails under Stacked Borrows ("that tag does not exist"). The fix is
+    // caller-side: initialize through the exclusive `&mut` borrow before
+    // publishing, then derive the shared handle from `&raw mut` provenance. This
+    // mirrors `ISpinLock<Thread, OffsetOfLock>` embedded in a static `Thread`.
+    struct ThreadLike {
+        // Keep `lock` at a non-zero offset so `this_mut` walks back to a
+        // distinct, non-zero-sized region, as it does for the real `Thread`.
+        _id: u64,
+        lock: INoLock<ThreadLike, ThreadLock>,
+    }
+
+    crate::impl_simple_intrusive_adapter!(ThreadLock, ThreadLike, lock);
+
+    // NOTE: this is an example to show `&'static mut` + `lock.write()` violates alising rules.
+    #[test]
+    fn test_inlock_from_static_storage() {
+        use core::{mem::MaybeUninit, ptr};
+
+        static mut SLOT: MaybeUninit<ThreadLike> = MaybeUninit::uninit();
+        unsafe {
+            let slot = ptr::addr_of_mut!(SLOT).cast::<ThreadLike>();
+            // Initialize the whole owner while the storage is still exclusively
+            // borrowed (`&raw mut`), before any shared handle is published.
+            slot.write(ThreadLike {
+                _id: 0,
+                lock: INoLock::new(),
+            });
+            // Mutate through the exclusive borrow first, exactly like
+            // `build_static_thread` does via `s.arc.get_mut()`.
+            (*slot).lock.write();
+        }
+    }
+
+    // NOTE: this is an example to show `lock.write()` still violates alising rules,
+    // and thus it's not a sound API at all.
+    #[test]
+    fn test_inlock_from_local_storage() {
+        let slot = ThreadLike {
+            _id: 0,
+            lock: INoLock::new(),
+        };
+        unsafe { slot.lock.write() };
+    }
 }
