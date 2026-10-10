@@ -255,4 +255,15 @@ mod tests {
             (*slot).lock.write();
         }
     }
+
+    // NOTE: this is an example to show `lock.write()` still violates alising rules,
+    // and thus it's not a sound API at all.
+    #[test]
+    fn test_inlock_from_local_storage() {
+        let slot = ThreadLike {
+            _id: 0,
+            lock: INoLock::new(),
+        };
+        unsafe { slot.lock.write() };
+    }
 }
