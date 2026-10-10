@@ -162,24 +162,14 @@ run_clippy("kernel_integration_test_clippy") {
 
 if (miri_boot) {
   action("check_boot_by_miri") {
-    script = "//build/scripts/miri/run_boot_miri.py"
-    inputs = [
-      miri_boot_model,
-      miri_boot_native_elf,
-      miri_boot_binary,
-    ]
-    inputs += exec_script("//build/scripts/miri/list_boot_sysroot_inputs.py",
-                          [ rebase_path(miri_boot_sysroot, "") ], "list lines")
+    script = "//build/scripts/miri/boot.py"
+    inputs = [ kmiri_toml ]
     deps = [ ":blueos" ]
     outputs = [ "$target_gen_dir/miri_boot.stamp" ]
     args = [
       rebase_path(root_build_dir, "//"),
-      miri_boot_case,
+      rebase_path(kmiri_toml, ""),
       rebase_path(outputs[0], "//"),
-      rebase_path(miri_boot_binary, ""),
-      rebase_path(miri_boot_sysroot, ""),
-      rebase_path(miri_boot_model, ""),
-      rebase_path(miri_boot_native_elf, ""),
     ]
   }
 }
