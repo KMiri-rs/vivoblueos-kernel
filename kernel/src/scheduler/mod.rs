@@ -473,9 +473,15 @@ pub extern "C" fn schedule() -> ! {
 pub(crate) fn miri_verify_idle_state() {
     assert!(arch::local_irq_enabled());
     assert!(next_ready_thread().is_none(), "unexpected ready thread");
-    assert_eq!(Thread::id(current_thread_ref()), Thread::id(idle::current_idle_thread_ref()));
+    assert_eq!(
+        Thread::id(current_thread_ref()),
+        Thread::id(idle::current_idle_thread_ref())
+    );
     assert_eq!(current_thread_ref().state(), thread::RUNNING);
-    assert!(arch::local_irq_enabled(), "IRQ guard failed to restore status");
+    assert!(
+        arch::local_irq_enabled(),
+        "IRQ guard failed to restore status"
+    );
 }
 
 #[inline]

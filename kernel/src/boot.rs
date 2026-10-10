@@ -189,7 +189,9 @@ fn init_bss() {
 #[cfg(miri)]
 fn init_bss() {
     unsafe {
-        if INIT_BSS_DONE { return; }
+        if INIT_BSS_DONE {
+            return;
+        }
         assert!(!INIT_HEAP_DONE);
         assert!(!INIT_ARRAY_DONE);
         assert!(!INIT_VFS_DONE);
@@ -197,7 +199,6 @@ fn init_bss() {
     }
     blueos_infra::miri_println!("BLUEOS_BSS_RUST_INITIAL_VALUES");
 }
-
 
 #[inline(never)]
 #[cfg(not(miri))]
@@ -218,11 +219,15 @@ pub(crate) fn run_init_array() {
 #[cfg(miri)]
 pub(crate) fn run_init_array() {
     // Gate 1 verifies __init_array_start == __init_array_end in the native minimal ELF.
-    assert!(cfg!(blueos_miri_empty_init_array), "constructor-table evidence is required");
-    unsafe { INIT_ARRAY_DONE = true; }
+    assert!(
+        cfg!(blueos_miri_empty_init_array),
+        "constructor-table evidence is required"
+    );
+    unsafe {
+        INIT_ARRAY_DONE = true;
+    }
     blueos_infra::miri_println!("BLUEOS_INIT_ARRAY_EMPTY_VERIFIED");
 }
-
 
 #[inline(never)]
 #[cfg(not(miri))]
@@ -246,7 +251,6 @@ fn init_apps() {
     blueos_infra::miri_println!("BLUEOS_APPS_NOT_LOADED");
 }
 
-
 #[inline(never)]
 #[cfg(not(miri))]
 pub(crate) fn init_heap() {
@@ -262,7 +266,9 @@ pub(crate) fn init_heap() {
 #[cfg(miri)]
 pub(crate) fn init_heap() {
     unsafe {
-        if INIT_HEAP_DONE { return; }
+        if INIT_HEAP_DONE {
+            return;
+        }
         let start = crate::miri_boot::heap_start();
         allocator::init_heap(start, start.add(crate::miri_boot::HEAP_SIZE));
         INIT_HEAP_DONE = true;

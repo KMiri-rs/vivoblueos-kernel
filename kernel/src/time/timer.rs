@@ -268,8 +268,14 @@ pub(crate) fn expire_timers(deadline: Tick) -> Option<Tick> {
     let _guard = EXPIRE_BARRIER.try_irqsave_lock()?;
 
     let soft_deadline = {
-        #[cfg(soft_timer)] { wake_up_soft_timer_worker(deadline).unwrap_or(Tick::MAX) }
-        #[cfg(not(soft_timer))] { Tick::MAX }
+        #[cfg(soft_timer)]
+        {
+            wake_up_soft_timer_worker(deadline).unwrap_or(Tick::MAX)
+        }
+        #[cfg(not(soft_timer))]
+        {
+            Tick::MAX
+        }
     };
     let hard_deadline;
     let res;
@@ -288,11 +294,15 @@ pub(crate) fn expire_timers(deadline: Tick) -> Option<Tick> {
 
 fn update_clock_interrupt() -> Tick {
     let soft_deadline = {
-        #[cfg(soft_timer)] {
+        #[cfg(soft_timer)]
+        {
             let mut w = unsafe { &SW_TIMER_WORKER.timers }.irqsave_lock();
             w.next_deadline().unwrap_or(Tick::MAX)
         }
-        #[cfg(not(soft_timer))] { Tick::MAX }
+        #[cfg(not(soft_timer))]
+        {
+            Tick::MAX
+        }
     };
     let hard_deadline = HW_TIMERS
         .irqsave_lock()

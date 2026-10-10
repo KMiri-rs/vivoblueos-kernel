@@ -69,7 +69,6 @@ impl Context {
         self
     }
 
-
     // We are following C-ABI, since Rust ABI is not stabilized.
     // FIXME: rustc miscompiles it if inlined.
     #[inline(never)]
