@@ -45,8 +45,6 @@
 // blueos_test_macro::test_only!();
 
 extern crate alloc;
-#[cfg(miri)]
-mod miri_boot;
 pub mod allocator;
 pub mod arch;
 #[cfg(kernel_async)]
@@ -64,6 +62,8 @@ pub mod error;
 pub mod ffi;
 pub mod irq;
 pub mod logger;
+#[cfg(miri)]
+mod miri_boot;
 pub mod mm;
 #[cfg(enable_net)]
 pub mod net;

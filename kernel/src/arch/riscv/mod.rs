@@ -14,8 +14,8 @@
 
 pub(crate) mod irq;
 
-mod trap;
 mod context;
+mod trap;
 pub(crate) use context::*;
 
 use crate::{boards, irq as sysirq, scheduler, scheduler::ContextSwitchHookHolder};

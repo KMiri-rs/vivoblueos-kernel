@@ -23,11 +23,7 @@
 use crate::arch::trap_entry;
 use crate::{
     allocator,
-    arch::{
-        self,
-        local_irq_enabled,
-        Context,
-    },
+    arch::{self, local_irq_enabled, Context},
     devices::clock::riscv_clock::RiscvClock,
     drivers::msip::Msip,
     scheduler, time,

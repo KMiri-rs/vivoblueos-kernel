@@ -30,16 +30,24 @@ impl Plic {
     #[inline]
     fn register_base(&self) -> *mut u32 {
         #[cfg(miri)]
-        { core::ptr::with_exposed_provenance_mut(self.base as usize) }
+        {
+            core::ptr::with_exposed_provenance_mut(self.base as usize)
+        }
         #[cfg(not(miri))]
-        { self.base }
+        {
+            self.base
+        }
     }
 
     pub fn init(&self) {}
 
     pub fn set_priority(&self, irq: u32, prio: u32) {
         debug_assert!(irq > 0);
-        unsafe { self.register_base().offset(irq as isize).write_volatile(prio) };
+        unsafe {
+            self.register_base()
+                .offset(irq as isize)
+                .write_volatile(prio)
+        };
     }
 
     pub fn enable(&self, cpu_id: usize, irq: u32) {

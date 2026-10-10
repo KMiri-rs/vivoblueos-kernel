@@ -38,7 +38,10 @@ pub(crate) extern "C" fn current_cpu_id() -> usize {
 }
 
 pub(crate) extern "C" fn pend_switch_context() {
-    assert!(!crate::irq::is_in_irq(), "Miri: hardware interrupts are unsupported");
+    assert!(
+        !crate::irq::is_in_irq(),
+        "Miri: hardware interrupts are unsupported"
+    );
     crate::scheduler::relinquish_me();
 }
 
