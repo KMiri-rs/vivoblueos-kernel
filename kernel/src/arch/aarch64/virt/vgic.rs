@@ -718,6 +718,7 @@ fn clear_irq_pending_locked(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     fn setup_test_env() {

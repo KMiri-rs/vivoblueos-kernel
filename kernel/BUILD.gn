@@ -14,6 +14,7 @@
 
 import("//build/boards/${board}.gni")
 import("//build/templates/build_template.gni")
+import("//build/templates/miri.gni")
 import("//build/toolchain/blueos.gni")
 
 _kernel_default_cfgs = [
@@ -170,6 +171,38 @@ if (miri_boot) {
       rebase_path(root_build_dir, "//"),
       rebase_path(kmiri_toml, ""),
       rebase_path(outputs[0], "//"),
+    ]
+  }
+}
+
+if (miri_test_kernel) {
+  group("check_kernel_by_miri") {
+    testonly = true
+    deps = [ ":kernel_miri_test" ]
+  }
+
+  miri_test("kernel_miri_test") {
+    crate = "src/lib.rs"
+    deps = [
+      ":blueos",
+      "//kernel/test_harness:blueos_test_macro(//build/toolchain:host)",
+    ]
+
+    test_name = kernel_miri_test_case
+    extra_miri_flags = miri_flags
+    miri_target = rust_abi_target
+    if (board == "qemu_riscv64") {
+      miri_target = "riscv64-vivo-blueos"
+    }
+    extra_miri_flags += [
+      "-Aunsafe_op_in_unsafe_fn",
+      "-Aunused",
+      "-Asuspicious_runtime_symbol_definitions",
+      "-Astatic_mut_refs",
+      "--target",
+      miri_target,
+      "--cfg=disable_weak_symbol",
+      "--cfg=kernel_async",
     ]
   }
 }

@@ -590,6 +590,7 @@ pub fn channel<T, const N: usize>() -> (Sender<T, N>, Receiver<T, N>) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     use crate::asynk;

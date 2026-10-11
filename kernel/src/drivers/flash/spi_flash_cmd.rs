@@ -244,6 +244,7 @@ fn addr_bytes(addr: u32) -> Result<[u8; 3], FlashError> {
 mod tests {
     use super::*;
     use alloc::sync::Arc;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::cell::UnsafeCell;
 

@@ -213,6 +213,7 @@ unsafe impl Sync for Semaphore {}
 mod tests {
     use super::*;
     use crate::scheduler::{InsertByPrio, InsertMode, InsertToEnd};
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

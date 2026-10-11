@@ -54,6 +54,7 @@ mod tests {
     use super::*;
     use crate::{static_arc, types::Arc};
     use alloc::vec::Vec;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     const UNITTEST_THREAD_NUM: usize = blueos_kconfig::CONFIG_UNITTEST_THREAD_NUM as usize;
 

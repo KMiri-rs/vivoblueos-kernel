@@ -64,7 +64,7 @@ pub struct Mutex {
 }
 
 impl Mutex {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             pending: SpinLock::new(WaitQueue::new()),
             nesting_count: Cell::new(0),
@@ -434,6 +434,7 @@ mod tests {
         thread, time,
     };
     use alloc::{boxed::Box, vec, vec::Vec};
+    #[cfg(not(miri))]
     use blueos_test_macro::{only_test, test};
     use core::sync::atomic::{AtomicUsize, Ordering};
 

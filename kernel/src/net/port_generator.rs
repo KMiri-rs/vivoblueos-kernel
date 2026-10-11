@@ -131,6 +131,7 @@ fn next_ephemeral(current: u16) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     #[test]
     fn test_port_generator() {

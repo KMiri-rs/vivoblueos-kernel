@@ -725,6 +725,7 @@ pub extern "C" fn send_ipi(_id: usize) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     // See https://developer.arm.com/documentation/107706/0100/Exceptions-and-interrupts-overview/Stack-frames.

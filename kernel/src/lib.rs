@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![no_std]
-#![cfg_attr(miri, no_main)]
+#![cfg_attr(all(miri, not(test)), no_main)]
 #![allow(internal_features)]
 #![allow(incomplete_features)]
 #![allow(clippy::crate_in_macro_def)]
@@ -36,10 +36,13 @@
 #![feature(pointer_is_aligned_to)]
 #![feature(trivial_bounds)]
 // Attributes applied when we're testing the kernel.
-#![cfg_attr(test, no_main)]
-#![cfg_attr(test, feature(custom_test_frameworks))]
-#![cfg_attr(test, test_runner(tests::kernel_unittest_runner))]
-#![cfg_attr(test, reexport_test_harness_main = "run_kernel_unittests")]
+#![cfg_attr(all(test, not(miri)), no_main)]
+#![cfg_attr(all(test, not(miri)), feature(custom_test_frameworks))]
+#![cfg_attr(all(test, not(miri)), test_runner(tests::kernel_unittest_runner))]
+#![cfg_attr(
+    all(test, not(miri)),
+    reexport_test_harness_main = "run_kernel_unittests"
+)]
 
 // #[cfg(test)]
 // blueos_test_macro::test_only!();
@@ -50,7 +53,7 @@ pub mod arch;
 #[cfg(kernel_async)]
 pub mod asynk;
 pub mod boards;
-#[cfg(use_kernel_boot)]
+#[cfg(any(use_kernel_boot, miri))]
 pub(crate) mod boot;
 pub mod config;
 pub mod console;
@@ -123,6 +126,7 @@ mod tests {
     };
     use alloc::vec::Vec;
     use blueos_header::syscalls::NR::Nop;
+    #[cfg(not(miri))]
     use blueos_test_macro::{only_test, test};
     use core::{
         mem::MaybeUninit,
@@ -134,6 +138,9 @@ mod tests {
     use defmt_rtt as _;
     use spin::Lazy;
     use thread::{Entry, SystemThreadStorage, Thread, ThreadKind, ThreadNode};
+
+    #[cfg(miri)]
+    fn run_kernel_unittests() {}
 
     #[used]
     #[link_section = ".bk_app_array"]
@@ -225,11 +232,13 @@ mod tests {
     #[cfg(target_pointer_width = "32")]
     const EMBALLOC_SIZE: usize = 2 << 20;
 
+    #[cfg(not(miri))]
     #[global_allocator]
     static ALLOCATOR: KernelAllocator = KernelAllocator;
     // Emballoc is for correctness reference.
     //static ALLOCATOR: emballoc::Allocator<{ EMBALLOC_SIZE }> = emballoc::Allocator::new();
 
+    #[cfg(not(miri))]
     #[panic_handler]
     fn oops(info: &PanicInfo) -> ! {
         let _guard = DisableInterruptGuard::new();
@@ -318,7 +327,8 @@ mod tests {
         assert!(arch::local_irq_enabled());
     }
 
-    #[test(thread = 2, repeat = 2)]
+    #[cfg_attr(not(miri), test(thread = 2, repeat = 2))]
+    #[cfg_attr(miri, test)]
     fn test_harness_thread_attribute() {
         static ARRIVED: AtomicUsize = AtomicUsize::new(0);
 
@@ -589,7 +599,10 @@ mod tests {
     // FIXME: We have performance issue on SMP. See
     // https://github.com/vivoblueos/kernel/issues/111 for details.
     #[cfg_attr(not(target_board = "qemu_riscv64"), test)]
-    #[cfg_attr(target_board = "qemu_riscv64", blueos_test_macro::ignore)]
+    #[cfg_attr(
+        all(not(miri), target_board = "qemu_riscv64"),
+        blueos_test_macro::ignore
+    )]
     fn stress_mqueue() {
         MQUEUE.init();
         reset_and_queue_test_threads(test_mqueue, Some(test_mqueue_cleanup));
@@ -772,21 +785,29 @@ mod tests {
     pub fn kernel_unittest_runner(tests: &[&dyn Fn()]) {
         let t = scheduler::current_thread();
         #[cfg(use_defmt)]
-        use defmt::println;
-        #[cfg(not(use_defmt))]
-        use semihosting::println;
-
-        println!("---- Running {} kernel unittests...", tests.len());
+        defmt::println!("---- Running {} kernel unittests...", tests.len());
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!("---- Running {} kernel unittests...", tests.len());
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!("---- Running {} kernel unittests...", tests.len());
         #[cfg(use_defmt)]
-        println!(
+        defmt::println!(
             "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             ThreadNode::strong_count(&t),
             defmt::Debug2Format(&allocator::memory_info()),
             arch::current_sp(),
         );
-        #[cfg(not(use_defmt))]
-        println!(
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!(
+            "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
+            Thread::id(&t),
+            ThreadNode::strong_count(&t),
+            allocator::memory_info(),
+            arch::current_sp(),
+        );
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!(
             "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             ThreadNode::strong_count(&t),
@@ -797,20 +818,32 @@ mod tests {
             test();
         }
         #[cfg(use_defmt)]
-        println!(
+        defmt::println!(
             "After test, thread 0x{:x}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             defmt::Debug2Format(&allocator::memory_info()),
             arch::current_sp()
         );
-        #[cfg(not(use_defmt))]
-        println!(
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!(
             "After test, thread 0x{:x}, heap status: {:?}, sp:  0x{:x}",
             Thread::id(&t),
             allocator::memory_info(),
             arch::current_sp()
         );
-        println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!(
+            "After test, thread 0x{:x}, heap status: {:?}, sp:  0x{:x}",
+            Thread::id(&t),
+            allocator::memory_info(),
+            arch::current_sp()
+        );
+        #[cfg(use_defmt)]
+        defmt::println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!("---- Done kernel unittests.");
         #[cfg(coverage)]
         crate::coverage::write_coverage_data();
         #[cfg(use_defmt)]
@@ -960,7 +993,7 @@ mod tests {
     }
 
     // The test always panicks since we are using 0xdeadbeef as magic number.
-    #[blueos_test_macro::ignore]
+    #[cfg_attr(not(miri), blueos_test_macro::ignore)]
     fn test_always_double_free() {
         let mut spray_vecs = alloc::vec::Vec::new();
         for size in (32..256).step_by(8) {

@@ -4,18 +4,20 @@ use core::{
     sync::atomic::Ordering,
 };
 pub(crate) const HEAP_SIZE: usize = 8 * 1024 * 1024;
-#[global_allocator]
+#[cfg_attr(not(test), global_allocator)]
 static GLOBAL: crate::allocator::KernelAllocator = crate::allocator::KernelAllocator;
 unsafe extern "C" {
     #[link_name = "exit"]
     fn interpreter_exit(code: i32) -> !;
     fn abort() -> !;
 }
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
     blueos_infra::miri_println!("BLUEOS_MIRI_PANIC: {}", info);
     unsafe { abort() }
 }
+#[cfg(not(test))]
 #[alloc_error_handler]
 fn oom(layout: Layout) -> ! {
     panic!("kernel allocation failed: {:?}", layout);
@@ -40,7 +42,7 @@ pub(crate) fn verify_heap() {
     blueos_infra::miri_println!("BLUEOS_HEAP_READY");
 }
 pub(crate) fn console_ready() {
-    assert!(arch_crate::VECTOR_INSTALLED.load(Ordering::SeqCst));
+    assert!(crate::arch::VECTOR_INSTALLED.load(Ordering::SeqCst));
     assert!(crate::devices::DeviceManager::get()
         .get_char_device("ttyS0")
         .is_some());

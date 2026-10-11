@@ -80,6 +80,7 @@ fn write_cntv_ctl(ctl: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

@@ -193,6 +193,7 @@ pub unsafe extern "C" fn strnlen(s: *const c_char, size: c_size_t) -> c_size_t {
 }
 
 /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/abort.html>.
+#[cfg(not(miri))]
 #[linkage = "weak"]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn abort() -> ! {

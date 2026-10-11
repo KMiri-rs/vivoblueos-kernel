@@ -1,0 +1,5 @@
+# Host-side virtual board for kernel miri unit tests.
+
+config SOC_MIRI
+    bool "Host-side Miri board"
+    default y

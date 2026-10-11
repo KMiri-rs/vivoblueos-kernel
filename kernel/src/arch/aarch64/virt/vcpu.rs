@@ -395,6 +395,7 @@ impl core::fmt::Display for VcpuError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
