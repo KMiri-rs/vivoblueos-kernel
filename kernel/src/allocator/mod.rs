@@ -31,9 +31,15 @@ mod tlsf;
 #[cfg(allocator = "tlsf")]
 pub use tlsf::heap::Heap;
 
-#[cfg(allocator = "llff")]
+#[cfg(any(
+    allocator = "llff",
+    not(any(allocator = "tlsf", allocator = "slab", allocator = "slab_dynamic"))
+))]
 mod llff;
-#[cfg(allocator = "llff")]
+#[cfg(any(
+    allocator = "llff",
+    not(any(allocator = "tlsf", allocator = "slab", allocator = "slab_dynamic"))
+))]
 pub use llff::heap::LlffHeap as Heap;
 
 #[cfg(allocator = "slab")]
@@ -375,6 +381,7 @@ pub fn reclaim_page_pool() {
 mod tests {
     use super::*;
     use alloc::{alloc::Layout, boxed::Box, vec, vec::Vec};
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

@@ -31,6 +31,15 @@ const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 #[cfg(log_level_trace)]
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Trace;
+#[cfg(not(any(
+    log_level_off,
+    log_level_error,
+    log_level_warn,
+    log_level_info,
+    log_level_debug,
+    log_level_trace
+)))]
+const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 /// log init
 pub fn logger_init() {

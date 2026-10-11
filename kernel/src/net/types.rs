@@ -609,6 +609,7 @@ pub fn write_to_sockaddr(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::mem::size_of;
 

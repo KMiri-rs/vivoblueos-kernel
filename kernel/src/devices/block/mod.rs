@@ -289,6 +289,7 @@ impl<E: embedded_io::Error, const SECTOR_SIZE: usize> Device for Block<E, SECTOR
 #[cfg(test)]
 mod block_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[derive(Debug)]
@@ -341,6 +342,7 @@ mod block_tests {
 mod flash_tests {
     use super::*;
     use crate::drivers::flash::{spi_flash::FlashBlockError, spi_flash_cmd::FlashError};
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use embedded_hal::spi::ErrorKind as SpiErrorKind;
     use embedded_io::Error as IOError;
@@ -397,6 +399,7 @@ mod flash_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use semihosting::println;
 

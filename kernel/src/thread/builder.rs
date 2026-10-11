@@ -230,6 +230,7 @@ pub fn build_static_thread(
 mod tests {
     use super::*;
     use crate::sync::ConstBarrier;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::alloc::Layout;
 

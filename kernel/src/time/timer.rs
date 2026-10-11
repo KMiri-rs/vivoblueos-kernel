@@ -318,6 +318,7 @@ mod tests {
     use super::*;
     use crate::{sync::SpinLock, types::Arc, with_iou};
     use alloc::vec::Vec;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::sync::atomic::{AtomicUsize, Ordering};
 

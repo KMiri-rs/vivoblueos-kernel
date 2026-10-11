@@ -155,6 +155,7 @@ impl core::fmt::Display for Xpsr {
 #[cfg(all(test, not(target_os = "none")))]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

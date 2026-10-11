@@ -825,6 +825,7 @@ fn flags_to_string(flags: c_int) -> String {
 mod tests {
     use super::*;
     use crate::vfs::dirent::{Dirent, DirentType};
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use libc;
 

@@ -150,6 +150,7 @@ impl<T: 'static, A: IntrusiveAdapter<T> + 'static, O: StaticListOwner<T, A>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     impl_simple_intrusive_adapter!(Node, Foobar, node);

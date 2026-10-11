@@ -380,6 +380,7 @@ mod tests {
         devices::bus::{Bus, BusInterface},
         drivers::*,
     };
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[derive(Debug, Default)]

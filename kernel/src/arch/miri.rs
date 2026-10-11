@@ -1,9 +1,11 @@
 //! Miri startup adapter: no hardware interrupts or context switches.
 use crate::scheduler::ContextSwitchHookHolder;
 pub(crate) use arch_crate::{
-    bootstrap, disable_local_irq, disable_local_irq_save, enable_local_irq,
-    enable_local_irq_restore, idle, local_irq_enabled,
+    disable_local_irq, disable_local_irq_save, enable_local_irq, enable_local_irq_restore, idle,
+    local_irq_enabled,
 };
+use core::sync::atomic::AtomicBool;
+pub static VECTOR_INSTALLED: AtomicBool = AtomicBool::new(false);
 // These files contain only Rust layout/types and context preparation.
 #[path = "riscv/context.rs"]
 mod context;
@@ -54,4 +56,8 @@ pub(crate) extern "C" fn switch_stack(
 
 pub(crate) extern "C" fn send_ipi(_hart: usize) {
     panic!("Miri: inter-processor interrupts are unsupported");
+}
+
+pub(crate) extern "C" fn bootstrap() {
+    enable_local_irq_restore((3 << 11) | (1 << 7));
 }

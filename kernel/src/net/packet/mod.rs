@@ -95,6 +95,7 @@ impl Packet {
 mod tests {
     use super::*;
     use alloc::vec;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

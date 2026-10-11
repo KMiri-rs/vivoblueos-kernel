@@ -406,6 +406,7 @@ mod tests {
     use super::*;
     use crate::devices::block::{Block, BlockDriverOps, BlockError, ErrorType};
     use alloc::sync::Arc;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::cell::UnsafeCell;
     use embedded_hal::spi::{ErrorKind, Operation, SpiDevice};

@@ -109,6 +109,7 @@ macro_rules! buddy_test_exclusive {
 #[cfg(test)]
 mod basic_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -225,6 +226,7 @@ mod basic_tests {
 #[cfg(test)]
 mod split_coalesce_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -372,6 +374,7 @@ mod split_coalesce_tests {
 #[cfg(test)]
 mod aligned_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -430,6 +433,7 @@ mod aligned_tests {
 #[cfg(test)]
 mod boundary_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -473,6 +477,7 @@ mod boundary_tests {
 #[cfg(test)]
 mod stress_tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -527,6 +532,7 @@ mod stress_tests {
 #[cfg(test)]
 mod order_tests {
     use super::{heap::order_of_size, page::PAGE_SIZE};
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]
@@ -552,6 +558,7 @@ mod translation_tests {
         page::{Page, PAGE_SHIFT},
         *,
     };
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
 
     #[test]

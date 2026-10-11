@@ -313,6 +313,7 @@ unsafe impl Sync for MessageQueue {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(miri))]
     use blueos_test_macro::test;
     use core::ptr;
     const NO_WAITING: Tick = Tick(0);
