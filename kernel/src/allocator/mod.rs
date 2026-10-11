@@ -20,6 +20,8 @@ use crate::{
 };
 use alloc::alloc::Layout;
 use core::{alloc::GlobalAlloc, ptr};
+#[cfg(all(miri, test, miri_use_blueos_alloc))]
+use spin::Once;
 
 // Raw heap implementations are in the allocator_crate.
 // This module only contains SpinLock wrappers and the GlobalAlloc impl.
@@ -63,9 +65,34 @@ static_arc! {
    HEAP(Heap, Heap::new()),
 }
 
+#[cfg(all(miri, test, miri_use_blueos_alloc))]
+const MIRI_TEST_HEAP_SIZE: usize = 1024 * 1024;
+
+#[cfg(all(miri, test, miri_use_blueos_alloc))]
+static MIRI_TEST_HEAP_INIT: Once<()> = Once::new();
+
+#[cfg(all(miri, test, miri_use_blueos_alloc))]
+static mut MIRI_TEST_HEAP: [u8; MIRI_TEST_HEAP_SIZE] = [0; MIRI_TEST_HEAP_SIZE];
+
+#[cfg(all(miri, test, miri_use_blueos_alloc))]
+#[inline]
+fn ensure_miri_test_heap_ready() {
+    MIRI_TEST_HEAP_INIT.call_once(|| unsafe {
+        let start = core::ptr::addr_of_mut!(MIRI_TEST_HEAP).cast::<u8>();
+        init_heap(start, start.add(MIRI_TEST_HEAP_SIZE));
+        blueos_infra::miri_println!("ensure_miri_test_heap_ready!");
+    });
+}
+
+#[cfg(not(all(miri, test, miri_use_blueos_alloc)))]
+#[inline]
+fn ensure_miri_test_heap_ready() {}
+
 unsafe impl GlobalAlloc for KernelAllocator {
     // TODO: support slab requesting pages from buddy as memory pool
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ensure_miri_test_heap_ready();
+
         #[cfg(allocator_buddy)]
         {
             use buddy::{heap::order_of_size, page::PAGE_SIZE};
@@ -83,6 +110,8 @@ unsafe impl GlobalAlloc for KernelAllocator {
 
     // TODO: support slab releasing pages back to buddy memory pool
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        ensure_miri_test_heap_ready();
+
         #[cfg(allocator_buddy)]
         {
             use buddy::{
@@ -103,6 +132,8 @@ unsafe impl GlobalAlloc for KernelAllocator {
 
     // TODO: support slab reallocating pages from buddy as memory pool
     unsafe fn realloc(&self, ptr: *mut u8, old_layout: Layout, new_size: usize) -> *mut u8 {
+        ensure_miri_test_heap_ready();
+
         #[cfg(allocator_buddy)]
         {
             use buddy::{
@@ -179,6 +210,7 @@ unsafe impl GlobalAlloc for KernelAllocator {
 
 impl KernelAllocator {
     pub fn memory_info() -> MemoryInfo {
+        ensure_miri_test_heap_ready();
         HEAP.memory_info()
     }
 }
@@ -249,6 +281,8 @@ pub fn memory_info() -> MemoryInfo {
 // TODO: Make malloc a blocking API, i.e., if the heap lock is
 // acquired by another thread, current thread should be suspended.
 pub fn malloc(size: usize) -> *mut u8 {
+    ensure_miri_test_heap_ready();
+
     if core::intrinsics::unlikely(size == 0) {
         return ptr::null_mut();
     }
@@ -264,6 +298,8 @@ pub fn malloc(size: usize) -> *mut u8 {
 ///
 /// * `ptr` - A pointer pointing to the memory location to be freed.
 pub fn free(ptr: *mut u8) {
+    ensure_miri_test_heap_ready();
+
     if core::intrinsics::unlikely(ptr.is_null()) {
         return;
     }
@@ -277,6 +313,8 @@ pub fn free(ptr: *mut u8) {
 /// * `ptr` - A pointer pointing to the memory location to be reallocated.
 /// * `newsize` - The new size for the reallocated memory.
 pub fn realloc(ptr: *mut u8, newsize: usize) -> *mut u8 {
+    ensure_miri_test_heap_ready();
+
     if newsize == 0 {
         free(ptr);
         return ptr::null_mut();
@@ -297,6 +335,8 @@ pub fn realloc(ptr: *mut u8, newsize: usize) -> *mut u8 {
 /// * `count` - Number of elements to allocate space for.
 /// * `size` - Size of each element.
 pub fn calloc(count: usize, size: usize) -> *mut u8 {
+    ensure_miri_test_heap_ready();
+
     let required_size = count * size;
     const ALIGN: usize = core::mem::size_of::<usize>();
     if let Ok(layout) = Layout::from_size_align(required_size, ALIGN) {
@@ -318,6 +358,8 @@ pub fn calloc(count: usize, size: usize) -> *mut u8 {
 /// * `size` - Minimum size of the memory region to allocate.
 /// * `align` - Alignment requirement for the returned memory.
 pub fn malloc_align(size: usize, align: usize) -> *mut u8 {
+    ensure_miri_test_heap_ready();
+
     if core::intrinsics::unlikely(size == 0) {
         return ptr::null_mut();
     }
@@ -333,6 +375,8 @@ pub fn malloc_align(size: usize, align: usize) -> *mut u8 {
 ///
 /// * `ptr` - Pointer to the memory region to deallocate.
 pub fn free_align(ptr: *mut u8, align: usize) {
+    ensure_miri_test_heap_ready();
+
     if ptr.is_null() {
         return;
     }
@@ -343,6 +387,7 @@ pub fn free_align(ptr: *mut u8, align: usize) {
 }
 
 pub(crate) fn get_max_free_block_size() -> usize {
+    ensure_miri_test_heap_ready();
     unsafe { HEAP.get_max_free_block_size() }
 }
 

@@ -201,9 +201,14 @@ if (miri_test_kernel) {
       "-Astatic_mut_refs",
       "--target",
       miri_target,
-      "--cfg=disable_weak_symbol",
       "--cfg=kernel_async",
     ]
+
+    if (miri_kernel_use_blueos_alloc) {
+      extra_miri_flags += [ "--cfg=miri_use_blueos_alloc" ]
+    } else {
+      extra_miri_flags += [ "--cfg=disable_weak_symbol" ]
+    }
   }
 }
 
