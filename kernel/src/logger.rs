@@ -70,8 +70,17 @@ impl log::Log for Logger {
             record.level(),
             record.args()
         );
-        #[cfg(test)]
+        #[cfg(all(test, not(miri)))]
         semihosting::println!(
+            "[T:{:09} C:{} TH:0x{:x}][{}] {} ",
+            timestamp,
+            cpu,
+            tid,
+            record.level(),
+            record.args()
+        );
+        #[cfg(all(test, miri))]
+        blueos_infra::miri_println!(
             "[T:{:09} C:{} TH:0x{:x}][{}] {} ",
             timestamp,
             cpu,

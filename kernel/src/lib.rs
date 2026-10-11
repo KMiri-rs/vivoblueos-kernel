@@ -785,21 +785,29 @@ mod tests {
     pub fn kernel_unittest_runner(tests: &[&dyn Fn()]) {
         let t = scheduler::current_thread();
         #[cfg(use_defmt)]
-        use defmt::println;
-        #[cfg(not(use_defmt))]
-        use semihosting::println;
-
-        println!("---- Running {} kernel unittests...", tests.len());
+        defmt::println!("---- Running {} kernel unittests...", tests.len());
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!("---- Running {} kernel unittests...", tests.len());
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!("---- Running {} kernel unittests...", tests.len());
         #[cfg(use_defmt)]
-        println!(
+        defmt::println!(
             "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             ThreadNode::strong_count(&t),
             defmt::Debug2Format(&allocator::memory_info()),
             arch::current_sp(),
         );
-        #[cfg(not(use_defmt))]
-        println!(
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!(
+            "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
+            Thread::id(&t),
+            ThreadNode::strong_count(&t),
+            allocator::memory_info(),
+            arch::current_sp(),
+        );
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!(
             "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             ThreadNode::strong_count(&t),
@@ -810,20 +818,32 @@ mod tests {
             test();
         }
         #[cfg(use_defmt)]
-        println!(
+        defmt::println!(
             "After test, thread 0x{:x}, heap status: {:?}, sp: 0x{:x}",
             Thread::id(&t),
             defmt::Debug2Format(&allocator::memory_info()),
             arch::current_sp()
         );
-        #[cfg(not(use_defmt))]
-        println!(
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!(
             "After test, thread 0x{:x}, heap status: {:?}, sp:  0x{:x}",
             Thread::id(&t),
             allocator::memory_info(),
             arch::current_sp()
         );
-        println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!(
+            "After test, thread 0x{:x}, heap status: {:?}, sp:  0x{:x}",
+            Thread::id(&t),
+            allocator::memory_info(),
+            arch::current_sp()
+        );
+        #[cfg(use_defmt)]
+        defmt::println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), not(miri)))]
+        semihosting::println!("---- Done kernel unittests.");
+        #[cfg(all(not(use_defmt), miri))]
+        blueos_infra::miri_println!("---- Done kernel unittests.");
         #[cfg(coverage)]
         crate::coverage::write_coverage_data();
         #[cfg(use_defmt)]

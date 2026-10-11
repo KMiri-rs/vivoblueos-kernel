@@ -323,7 +323,7 @@ impl Device for Tty {
     }
 
     fn ioctl(&self, request: u32, arg: usize) -> Result<(), ErrorKind> {
-        match request {
+        match request as libc::Ioctl {
             TCGETS => {
                 let termios = *self.termios.lock();
                 unsafe { store_user_termios(arg as *mut Termios, &termios) }
@@ -349,7 +349,7 @@ impl Device for Tty {
                 self.dev.handle_tcxonc(arg as c_int, cc)
             }
             TCSBRK => self.dev.handle_tcsbrk(arg as c_int),
-            req => match DeviceRequest::from(req) {
+            req => match DeviceRequest::from(req as u32) {
                 DeviceRequest::Config => Ok(()),
                 DeviceRequest::Close => Ok(()),
                 _ => Err(ErrorKind::InvalidData),

@@ -16,7 +16,15 @@ use crate::devices::{Device, DeviceClass, DeviceId, DeviceManager};
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 use blueos_infra::tinyrwlock::RwLock;
 use embedded_io::ErrorKind;
+#[cfg(not(miri))]
 use libc::{FBIOGET_FSCREENINFO, FBIOGET_VSCREENINFO, FBIOPUT_VSCREENINFO};
+
+#[cfg(miri)]
+const FBIOGET_VSCREENINFO: u32 = 0x4600;
+#[cfg(miri)]
+const FBIOPUT_VSCREENINFO: u32 = 0x4601;
+#[cfg(miri)]
+const FBIOGET_FSCREENINFO: u32 = 0x4602;
 
 /// Linux framebuffer character-device major number.
 pub const FRAMEBUFFER_MAJOR: usize = 29;

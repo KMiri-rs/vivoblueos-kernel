@@ -305,7 +305,7 @@ pub(crate) fn timer_create(
 
 pub(crate) fn timer_delete(timerid: timer_t) -> c_long {
     // Stub: treat any non-zero timerid as deletable.
-    if timerid == 0 {
+    if (timerid as usize) == 0 {
         return -EINVAL as c_long;
     }
     // TODO: actually delete the timer and free resources.
@@ -314,7 +314,7 @@ pub(crate) fn timer_delete(timerid: timer_t) -> c_long {
 
 pub(crate) fn timer_getoverrun(timerid: timer_t) -> c_long {
     // Stub: no overrun accounting.
-    if timerid == 0 {
+    if (timerid as usize) == 0 {
         return -EINVAL as c_long;
     }
     // TODO: actually get the overrun count.
@@ -322,7 +322,7 @@ pub(crate) fn timer_getoverrun(timerid: timer_t) -> c_long {
 }
 
 pub(crate) fn timer_gettime(timerid: timer_t, value: *mut itimerspec) -> c_long {
-    if timerid == 0 || value.is_null() {
+    if (timerid as usize) == 0 || value.is_null() {
         return -EINVAL as c_long;
     }
     // TODO: actually get the timer's remaining time and interval.
@@ -336,7 +336,7 @@ pub(crate) fn timer_settime(
     ovalue: *mut itimerspec,
 ) -> c_long {
     // Stub: validate pointers/flags
-    if timerid == 0 {
+    if (timerid as usize) == 0 {
         return -EINVAL as c_long;
     }
     if value.is_null() {
