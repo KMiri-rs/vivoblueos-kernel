@@ -46,6 +46,7 @@ pub unsafe extern "C" fn __aeabi_unwind_cpp_pr0() {}
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn posix_memalign(ptr: *mut *mut u8, align: usize, size: usize) -> c_int {
     let addr = allocator::malloc_align(size, align);
     if addr.is_null() {
@@ -57,30 +58,35 @@ pub extern "C" fn posix_memalign(ptr: *mut *mut u8, align: usize, size: usize) -
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn free(ptr: *mut u8) {
     allocator::free(ptr)
 }
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn malloc(size: usize) -> *mut u8 {
     allocator::malloc(size)
 }
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn memalign(align: usize, size: usize) -> *mut u8 {
     allocator::malloc_align(size, align)
 }
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
     allocator::calloc(count, size)
 }
 
 #[no_mangle]
 #[linkage = "weak"]
+#[cfg(not(disable_weak_symbol))]
 pub extern "C" fn realloc(ptr: *mut u8, newsize: usize) -> *mut u8 {
     allocator::realloc(ptr, newsize)
 }
