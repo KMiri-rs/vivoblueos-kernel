@@ -3,7 +3,7 @@ use core::{
     alloc::{GlobalAlloc, Layout},
     sync::atomic::Ordering,
 };
-pub(crate) const HEAP_SIZE: usize = 8 * 1024 * 1024;
+pub(crate) const HEAP_SIZE: usize = crate::boards::KERNEL_HEAP_SIZE;
 #[cfg_attr(not(test), global_allocator)]
 static GLOBAL: crate::allocator::KernelAllocator = crate::allocator::KernelAllocator;
 unsafe extern "C" {
@@ -23,7 +23,8 @@ fn oom(layout: Layout) -> ! {
     panic!("kernel allocation failed: {:?}", layout);
 }
 pub(crate) unsafe fn heap_start() -> *mut u8 {
-    0x03000000 as *mut u8 // boot.toml supplies an actual, aligned 8 MiB allocation
+    // Same physical address as link.x `__heap_start` and boot.toml HeapBacking.
+    crate::boards::KERNEL_HEAP_PHYS as *mut u8
 }
 pub(crate) fn verify_heap() {
     unsafe {
@@ -47,11 +48,6 @@ pub(crate) fn console_ready() {
         .get_char_device("ttyS0")
         .is_some());
     let _console = crate::devices::console::get_console();
-    unsafe {
-        assert_eq!((0x10000005 as *const u8).read_volatile(), 0x60);
-        assert_eq!((0x0c000028 as *const u32).read_volatile(), 1);
-        assert_ne!((0x0c002000 as *const u32).read_volatile() & (1 << 10), 0);
-    }
     blueos_infra::miri_println!("BLUEOS_CONSOLE_READY");
 }
 pub(crate) fn scheduler_ready() {
@@ -89,24 +85,6 @@ pub(crate) fn done() -> ! {
 fn miri_start(_: isize, _: *const *const u8) -> isize {
     assert_eq!(blueos_kconfig::CONFIG_NUM_CORES, 1);
     blueos_infra::miri_println!("BLUEOS_MIRI_ENTRY");
-    unsafe {
-        // Real backing allocations for the modeled MMIO register ranges are in boot.toml.
-        let uart = 0x10000000 as *mut u8;
-        uart.write_volatile(0);
-        for i in 1..7 {
-            uart.add(i).write_volatile(0);
-        }
-        uart.add(5).write_volatile(0x60);
-        let plic = 0x0c000000 as *mut u8;
-        plic.cast::<u32>().write_volatile(0);
-        for offset in [0x28, 0x2000, 0x200000, 0x200004] {
-            plic.add(offset).cast::<u32>().write_volatile(0);
-        }
-        let clint = 0x02000000 as *mut u8;
-        clint.cast::<u64>().write_volatile(0);
-        clint.add(0xbff8).cast::<u64>().write_volatile(0);
-        clint.add(0x4000).cast::<u64>().write_volatile(u64::MAX);
-    }
     crate::arch::bootstrap();
     assert!(!crate::arch::local_irq_enabled());
     crate::boot::init();

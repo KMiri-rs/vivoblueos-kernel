@@ -23,3 +23,8 @@ pub const NS16550_UART0_IRQNUM: IrqNumber = IrqNumber::new(10);
 // Physical memory range for buddy allocator (QEMU virt defaults to 128MB).
 pub const PHYS_DRAM_BASE: usize = 0x8000_0000;
 pub const PHYS_DRAM_SIZE: usize = 128 * 1024 * 1024;
+/// Fixed physical heap: 8MB above DRAM base, inside the 128MB DRAM window and
+/// above the kernel image linked at `PHYS_DRAM_BASE`. `link.x` and the Miri
+/// boot heap window use this address. Size matches `.heap` in `link.x`.
+pub const KERNEL_HEAP_PHYS: usize = PHYS_DRAM_BASE + 0x0080_0000;
+pub const KERNEL_HEAP_SIZE: usize = 8 * 1024 * 1024;

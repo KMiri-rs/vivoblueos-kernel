@@ -67,8 +67,8 @@ SECTIONS
     PROVIDE_HIDDEN(__bk_app_array_end = .);
   }
 
-  .heap : {
-    . = ALIGN(4096);
+  /* KERNEL_HEAP_PHYS in config.rs: DRAM base + 8MB. */
+  .heap 0x80800000 : {
     __heap_start = .;
     . += 0x800000;
     __heap_end = .;

@@ -16,3 +16,6 @@ pub const NS16550_UART0_BASE: u32 = 0x1000_0000;
 
 pub const PHYS_DRAM_BASE: usize = 0x8000_0000;
 pub const PHYS_DRAM_SIZE: usize = 128 * 1024 * 1024;
+// Keep heap window aligned with qemu_riscv64 layout used by miri boot.
+pub const KERNEL_HEAP_PHYS: usize = PHYS_DRAM_BASE + 0x0080_0000;
+pub const KERNEL_HEAP_SIZE: usize = 8 * 1024 * 1024;
