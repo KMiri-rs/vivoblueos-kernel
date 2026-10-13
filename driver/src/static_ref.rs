@@ -67,16 +67,19 @@ impl<T> Clone for StaticRef<T> {
 
 impl<T> Copy for StaticRef<T> {}
 
+/// QEMU virt NS16550 UART0, matching `qemu_riscv64::config::NS16550_UART0_BASE`.
+const QEMU_VIRT_UART0: usize = 0x1000_0000;
+
 impl<T> Deref for StaticRef<T> {
     type Target = T;
     fn deref(&self) -> &T {
         // SAFETY: `ptr` is aligned and dereferenceable for the program duration
         // as promised by the caller of `StaticRef::new`.
         #[cfg(miri)]
-        if self.ptr.as_ptr() as usize == 0x10000000 {
-            // Only the modeled qemu UART: recover runtime backing provenance for
-            // the const-created address. Ordinary Rust pointers retain their tags.
-            return unsafe { &*core::ptr::with_exposed_provenance::<T>(0x10000000) };
+        // qemu_riscv64 NS16550_UART0_BASE. A const MMIO address has no allocation
+        // tag, so recover the boot.toml backing. Other pointers keep their tags.
+        if self.ptr.as_ptr() as usize == QEMU_VIRT_UART0 {
+            return unsafe { &*core::ptr::with_exposed_provenance::<T>(QEMU_VIRT_UART0) };
         }
         unsafe { self.ptr.as_ref() }
     }

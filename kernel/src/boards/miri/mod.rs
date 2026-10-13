@@ -15,7 +15,7 @@
 mod config;
 use crate::{scheduler, support::SmpStagedInit};
 use blueos_hal::clock::Clock;
-pub use config::{PHYS_DRAM_BASE, PHYS_DRAM_SIZE};
+pub use config::{KERNEL_HEAP_PHYS, KERNEL_HEAP_SIZE, PHYS_DRAM_BASE, PHYS_DRAM_SIZE};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub struct ClockImpl;
