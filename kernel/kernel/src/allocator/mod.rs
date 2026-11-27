@@ -52,6 +52,8 @@ pub use slab::heap::DynamicSlabHeap;
 
 pub use allocator_crate::MemoryInfo;
 
+mod notify;
+
 pub struct KernelAllocator;
 static_arc! {
     HEAP(Heap, Heap::new()),
@@ -64,19 +66,23 @@ static_arc! {
 
 unsafe impl GlobalAlloc for KernelAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        HEAP.alloc(layout)
-            .map_or(ptr::null_mut(), |ptr| ptr.as_ptr())
+        let ptr = HEAP
+            .alloc(layout)
+            .map_or(ptr::null_mut(), |ptr| ptr.as_ptr());
+        notify::born(ptr, layout)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         // SAFETY: GlobalAlloc's caller supplies a live allocation and its layout.
-        unsafe { HEAP.dealloc(ptr, layout) };
+        unsafe { HEAP.dealloc(notify::died(ptr), layout) };
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, old_layout: Layout, new_size: usize) -> *mut u8 {
+        let block = notify::realloc_begin(ptr);
         // SAFETY: GlobalAlloc's caller supplies a live allocation and a valid new size.
-        unsafe { HEAP.realloc(ptr, old_layout, new_size) }
-            .map_or(ptr::null_mut(), |ptr| ptr.as_ptr())
+        let new = unsafe { HEAP.realloc(block, old_layout, new_size) }
+            .map_or(ptr::null_mut(), |ptr| ptr.as_ptr());
+        notify::realloc_end(ptr, new, new_size, old_layout.align())
     }
 }
 
@@ -129,8 +135,10 @@ pub fn malloc(size: usize) -> *mut u8 {
     }
     const ALIGN: usize = core::mem::size_of::<usize>();
     let layout = Layout::from_size_align(size, ALIGN).unwrap();
-    HEAP.alloc(layout)
-        .map_or(ptr::null_mut(), |allocation| allocation.as_ptr())
+    let ptr = HEAP
+        .alloc(layout)
+        .map_or(ptr::null_mut(), |allocation| allocation.as_ptr());
+    notify::born(ptr, layout)
 }
 
 /// Free previously allocated memory pointed by ptr.
@@ -142,7 +150,7 @@ pub fn free(ptr: *mut u8) {
     if core::intrinsics::unlikely(ptr.is_null()) {
         return;
     }
-    unsafe { HEAP.deallocate_unknown_align(ptr) };
+    unsafe { HEAP.deallocate_unknown_align(notify::died(ptr)) };
 }
 
 /// Reallocate memory pointed by ptr to have a new size.
@@ -159,10 +167,14 @@ pub fn realloc(ptr: *mut u8, newsize: usize) -> *mut u8 {
     if ptr.is_null() {
         return malloc(newsize);
     }
-    unsafe {
-        HEAP.realloc_unknown_align(ptr, newsize)
+    // Blocks from `malloc` are aligned to a word; so is the reallocated one.
+    const ALIGN: usize = core::mem::size_of::<usize>();
+    let block = notify::realloc_begin(ptr);
+    let new = unsafe {
+        HEAP.realloc_unknown_align(block, newsize)
             .map_or(ptr::null_mut(), |ptr| ptr.as_ptr())
-    }
+    };
+    notify::realloc_end(ptr, new, newsize, ALIGN)
 }
 
 /// Allocates memory for an array of elements and initializes all bytes in this block to zero.
@@ -185,8 +197,9 @@ pub fn calloc(count: usize, size: usize) -> *mut u8 {
     const ALIGN: usize = core::mem::size_of::<usize>();
     if let Ok(layout) = Layout::from_size_align(required_size, ALIGN) {
         if let Some(alloc_ptr) = HEAP.alloc(layout) {
-            unsafe { ptr::write_bytes(alloc_ptr.as_ptr(), 0, required_size) };
-            alloc_ptr.as_ptr()
+            let alloc_ptr = notify::born(alloc_ptr.as_ptr(), layout);
+            unsafe { ptr::write_bytes(alloc_ptr, 0, required_size) };
+            alloc_ptr
         } else {
             ptr::null_mut()
         }
@@ -207,8 +220,10 @@ pub fn malloc_align(size: usize, align: usize) -> *mut u8 {
     }
 
     let layout = Layout::from_size_align(size, align).unwrap();
-    HEAP.alloc(layout)
-        .map_or(ptr::null_mut(), |allocation| allocation.as_ptr())
+    let ptr = HEAP
+        .alloc(layout)
+        .map_or(ptr::null_mut(), |allocation| allocation.as_ptr());
+    notify::born(ptr, layout)
 }
 
 /// Deallocates memory that was allocated using `malloc_align`.
@@ -222,7 +237,7 @@ pub fn free_align(ptr: *mut u8, align: usize) {
     }
     unsafe {
         let layout = Layout::from_size_align_unchecked(0, align);
-        HEAP.dealloc(ptr, layout);
+        HEAP.dealloc(notify::died(ptr), layout);
     }
 }
 
