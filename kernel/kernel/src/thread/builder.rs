@@ -48,7 +48,7 @@ pub struct GlobalQueueVisitor<'a> {
 #[derive(Default, Debug)]
 pub(crate) struct GlobalQueue;
 
-impl const StaticListOwner<Thread, OffsetOfGlobal> for GlobalQueue {
+const impl StaticListOwner<Thread, OffsetOfGlobal> for GlobalQueue {
     fn get() -> &'static Arc<SpinLock<Head>> {
         &GLOBAL_QUEUE
     }
