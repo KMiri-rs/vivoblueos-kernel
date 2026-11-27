@@ -208,4 +208,22 @@ toolchain_info = {
     current_os = "blueos"
     current_cpu = "riscv32"
   }
+  kmiri_riscv64 = {
+    # The kernel interpreted by KMiri. The compiler driver sends proc macros
+    # to the host rustc and everything else to Miri for the target below.
+    # The target is a JSON copy of the BlueOS compiler's riscv64 target
+    # (libc picks its definitions by target_os/target_env).
+    label = "//build/toolchain:kmiri_riscv64"
+    llvm_target = "riscv64"
+    target_triple = rebase_path("//build/scripts/kmiri/riscv64-vivo-blueos.json")
+    cc = "clang --target=${llvm_target}"
+    cxx = "clang++ --target=${llvm_target}"
+    ld = cc
+    ar = "llvm-ar"
+    objcopy = "llvm-objcopy"
+    rustc = rebase_path("//build/scripts/kmiri/kmiri_rustc.py")
+    clippy_driver = "clippy-driver --target=${target_triple}"
+    current_os = "blueos"
+    current_cpu = "riscv64"
+  }
 }

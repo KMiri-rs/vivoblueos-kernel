@@ -660,6 +660,7 @@ cargo_spec("minicov") {
 }
 
 cargo_spec("semihosting") {
+  patches = [ "//external/rust/patches/semihosting-0.1.20/001-kmiri-host-backend.patch" ]
   package = "semihosting"
   version = "=0.1.20"
   default_features = false

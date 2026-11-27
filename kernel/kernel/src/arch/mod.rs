@@ -17,10 +17,21 @@ pub mod arm;
 #[cfg(target_arch = "arm")]
 pub use arm::*;
 
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(
+    any(target_arch = "riscv64", target_arch = "riscv32"),
+    not(target_board = "kmiri")
+))]
 pub mod riscv;
-#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+#[cfg(all(
+    any(target_arch = "riscv64", target_arch = "riscv32"),
+    not(target_board = "kmiri")
+))]
 pub use riscv::*;
+
+#[cfg(target_board = "kmiri")]
+pub mod kmiri;
+#[cfg(target_board = "kmiri")]
+pub use kmiri::*;
 
 #[cfg(target_arch = "aarch64")]
 pub mod aarch64;

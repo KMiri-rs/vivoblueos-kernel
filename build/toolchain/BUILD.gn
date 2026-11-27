@@ -233,6 +233,28 @@ blueos_toolchain("miri") {
   }
 }
 
+# The kernel interpreted by KMiri (//build/boards/kmiri.gni). Like the `miri`
+# toolchain, libraries are compiled by Miri so their rlibs carry full MIR and
+# the kernel binary is interpreted instead of linked.
+blueos_toolchain("kmiri_riscv64") {
+  _info = toolchain_info.kmiri_riscv64
+  llvm_target = _info.llvm_target
+  target_triple = _info.target_triple
+  cc = _info.cc
+  cxx = _info.cxx
+  ld = _info.ld
+  ar = _info.ar
+  objcopy = _info.objcopy
+  rustc = _info.rustc
+  clippy_driver = _info.clippy_driver
+  miri_mode = true
+  miri_sysroot_path = miri_sysroot
+  toolchain_args = {
+    current_os = _info.current_os
+    current_cpu = _info.current_cpu
+  }
+}
+
 blueos_toolchain("blueos_riscv32imc") {
   _info = toolchain_info.blueos_riscv32imc
   llvm_target = _info.llvm_target

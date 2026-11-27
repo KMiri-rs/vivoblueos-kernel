@@ -1,0 +1,43 @@
+# Patch: Select a host-call backend when the kernel is interpreted by KMiri.
+# Reason: The riscv backend issues the semihosting trap with inline asm,
+# which an interpreter cannot execute. Under cfg(miri) the same operation
+# number and parameter block are handed to the interpreter's
+# kern_miri_semihosting host function instead. Native builds are unchanged.
+
+--- a/src/sys/arm_compat/syscall/mod.rs
++++ b/src/sys/arm_compat/syscall/mod.rs
+@@ -6,7 +6,11 @@
+ #[allow(clippy::needless_pass_by_value)]
+ #[cfg_attr(target_arch = "aarch64", path = "aarch64.rs")]
+ #[cfg_attr(target_arch = "arm", path = "arm.rs")]
+-#[cfg_attr(any(target_arch = "riscv32", target_arch = "riscv64"), path = "riscv.rs")]
++#[cfg_attr(
++    all(not(miri), any(target_arch = "riscv32", target_arch = "riscv64")),
++    path = "riscv.rs"
++)]
++#[cfg_attr(all(miri, any(target_arch = "riscv32", target_arch = "riscv64")), path = "miri.rs")]
+ #[cfg_attr(target_arch = "xtensa", path = "xtensa.rs")]
+ mod arch;
+ 
+--- /dev/null
++++ b/src/sys/arm_compat/syscall/miri.rs
+@@ -0,0 +1,19 @@
++// Host-call backend used when running under the KMiri interpreter.
++
++use core::ffi::c_void;
++
++use super::{OperationNumber, ParamRegR, ParamRegW, RetReg};
++
++extern "C" {
++    fn kern_miri_semihosting(op: usize, param: *mut c_void) -> *mut c_void;
++}
++
++#[inline]
++pub unsafe fn syscall(number: OperationNumber, parameter: ParamRegW<'_>) -> RetReg {
++    unsafe { RetReg(kern_miri_semihosting(number.0 as usize, parameter.0)) }
++}
++
++#[inline]
++pub unsafe fn syscall_readonly(number: OperationNumber, parameter: ParamRegR<'_>) -> RetReg {
++    unsafe { RetReg(kern_miri_semihosting(number.0 as usize, parameter.0.cast_mut())) }
++}
