@@ -20,7 +20,10 @@
 
 pub(crate) mod irq;
 
-use crate::{boards, irq as sysirq, scheduler, scheduler::ContextSwitchHookHolder};
+use crate::{
+    boards, irq as sysirq, scheduler, scheduler::ContextSwitchHookHolder, thread, thread::Thread,
+    types::Arc,
+};
 use core::{
     cell::Cell,
     sync::atomic::{compiler_fence, AtomicUsize, Ordering},
@@ -41,6 +44,8 @@ unsafe extern "Rust" {
     ) -> usize;
     fn miri_switch_to(thread: usize);
     fn kern_miri_jump(pc: usize, regs: *const usize, nregs: usize) -> !;
+    fn kern_miri_register_irq_entry(entry: extern "Rust" fn(u8));
+    fn kern_miri_wait_for_interrupt();
 }
 
 // Same as riscv: a per-hart flag consumed on the way out of an interrupt.
@@ -106,11 +111,11 @@ pub(crate) extern "C" fn enable_local_irq_restore(old: usize) {
     compiler_fence(Ordering::SeqCst);
 }
 
-// riscv waits for an interrupt with `wfi`. Without a real wait, the idle loop
-// spins; the spin hint lets KMiri schedule another CPU meanwhile.
+// riscv waits for an interrupt with `wfi`, which leaves the interrupt enable
+// bit alone.
 #[inline]
 pub(crate) extern "C" fn idle() {
-    core::hint::spin_loop();
+    unsafe { kern_miri_wait_for_interrupt() };
 }
 
 // The address of a local of the caller's frame, i.e. a value inside the
@@ -214,10 +219,86 @@ fn start_thread(ctx_addr: usize) {
     unsafe { kern_miri_jump(ctx.mepc, regs.as_ptr(), regs.len()) }
 }
 
+// The interrupt causes that riscv's `handle_trap` dispatches on, `mcause`
+// without its interrupt bit. KMiri's CLINT delivers them as these vectors.
+const MSI: u8 = 3;
+#[cfg(has_mtime)]
+const TIMER_INT: u8 = 7;
+
+// riscv points `mtvec` at `trap_entry`; KMiri calls the registered entry with
+// the cause of the interrupt.
+pub(crate) fn init_vector_table() {
+    unsafe { kern_miri_register_irq_entry(irq_entry) };
+}
+
+// `trap_entry` and `handle_trap` for an interrupt. Taking it set MPIE = MIE,
+// which was 1 or the interrupt would not have been taken, and MIE = 0, which
+// KMiri did.
+extern "Rust" fn irq_entry(vector: u8) {
+    debug_assert!(!local_irq_enabled());
+    let id = current_cpu_id();
+    unsafe { SAVED_IRQ_ENABLE[id].set(true) };
+    sysirq::enter_irq();
+    let switched = match vector {
+        #[cfg(has_mtime)]
+        TIMER_INT => {
+            crate::time::handle_clock_interrupt();
+            might_switch_context()
+        }
+        // For waking up from wfi.
+        MSI => {
+            boards::clear_ipi(id);
+            false
+        }
+        _ => unreachable!("kmiri: unexpected interrupt {vector}"),
+    };
+    // A thread that switched away ran the trap return when it was switched
+    // back to (`finish_switch`).
+    if !switched {
+        trap_return();
+    }
+}
+
+// riscv's `might_switch_context`: on the way out of an interrupt, gives the
+// CPU to a ready thread of strictly higher priority if a switch was asked for.
+// Returns whether it switched.
+fn might_switch_context() -> bool {
+    if !claim_switch_context() {
+        return false;
+    }
+    let old = scheduler::current_thread_ref();
+    if old.preempt_count() != 0 {
+        return false;
+    }
+    let Some(next) =
+        scheduler::next_preferred_thread(old.priority(), scheduler::PreferMode::StrictHigher)
+    else {
+        return false;
+    };
+    debug_assert_eq!(next.state(), thread::READY);
+    debug_assert_ne!(Thread::id(old), Thread::id(&next));
+    let mut hook = ContextSwitchHookHolder::new(next);
+    if Thread::id(old) == Thread::id(scheduler::current_idle_thread_ref()) {
+        let res = old.transfer_state(thread::RUNNING, thread::READY);
+        debug_assert_eq!(res, Ok(()));
+    } else {
+        let res = scheduler::queue_ready_thread(thread::RUNNING, unsafe { Arc::clone_from(old) });
+        debug_assert_eq!(res, Ok(()));
+    };
+    switch_in_trap(&mut hook);
+    true
+}
+
 // riscv traps with `ecall`, saves the context on the current stack, moves to
 // the next thread's stack, runs the hook there and restores the next context.
 pub(crate) extern "C" fn switch_context_with_hook(hook: *mut ContextSwitchHookHolder) {
     trap_enter();
+    switch_in_trap(hook);
+}
+
+// The switch inside a trap: saves the context, moves to the next thread, and
+// once switched back runs the hook left for this thread and the trap return.
+fn switch_in_trap(hook: *mut ContextSwitchHookHolder) {
     let id = current_cpu_id();
     let mut ctx = Context::default();
     ctx.set_return_address(resume_in_switch_pc());

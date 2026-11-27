@@ -13,12 +13,14 @@
 // limitations under the License.
 
 //! The board of the KMiri machine (see `arch/kmiri`). It follows
-//! qemu_riscv64: the console is an NS16550 UART at the same address and the
-//! clock ticks at 10 MHz. The UART registers are plain memory provided by the
-//! KMiri machine description.
+//! qemu_riscv64: the console is an NS16550 UART and the timer and
+//! inter-processor interrupts come from a CLINT, at the same addresses, with
+//! the same drivers. KMiri models both devices (its machine description is
+//! KMiri-rs' `blueos/kmiri.toml`).
 
-pub use crate::devices::clock::kmiri_clock::KMiriClock as ClockImpl;
-use crate::{arch, devices::clock::kmiri_clock::KMiriClock};
+pub use crate::devices::clock::riscv_clock::QemuRiscvClock as ClockImpl;
+use crate::{arch, drivers::msip::Msip};
+use blueos_hal::clock::Clock;
 
 pub const PHYS_DRAM_BASE: usize = 0x8000_0000;
 pub const PHYS_DRAM_SIZE: usize = 128 * 1024 * 1024;
@@ -28,7 +30,8 @@ pub(crate) fn init() {
     assert!(!arch::local_irq_enabled());
     crate::boot::init_runtime();
     crate::boot::init_heap();
-    <KMiriClock as blueos_hal::clock::Clock>::stop();
+    arch::init_vector_table();
+    ClockImpl::stop();
 }
 
 crate::define_peripheral! {
@@ -38,10 +41,14 @@ crate::define_peripheral! {
 
 crate::define_pin_states!(None);
 
-// On riscv an IPI only wakes a hart sleeping in `wfi`; the KMiri idle loop
-// never sleeps, so there is nothing to wake.
-#[inline(always)]
-pub(crate) fn send_ipi(_hart: usize) {}
+type MyMsip = Msip<0x0200_0000>;
 
 #[inline(always)]
-pub(crate) fn clear_ipi(_hart: usize) {}
+pub(crate) fn send_ipi(hart: usize) {
+    MyMsip::send_ipi(hart)
+}
+
+#[inline(always)]
+pub(crate) fn clear_ipi(hart: usize) {
+    MyMsip::clear_ipi(hart)
+}
