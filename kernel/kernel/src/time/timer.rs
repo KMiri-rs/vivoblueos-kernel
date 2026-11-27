@@ -141,7 +141,7 @@ impl core::fmt::Debug for TimerCallback {
 
 #[derive(Default, Debug)]
 pub struct Node;
-impl const IntrusiveAdapter<Timer> for Node {
+const impl IntrusiveAdapter<Timer> for Node {
     fn offset() -> usize {
         core::mem::offset_of!(Timer, node)
     }

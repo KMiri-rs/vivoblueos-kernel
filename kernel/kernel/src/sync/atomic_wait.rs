@@ -45,7 +45,7 @@ type EntryListHead = UniqueListHead<AtomicWaitEntry, Sync, SyncEntry>;
 #[derive(Default, Debug)]
 pub struct SyncEntry;
 
-impl const StaticListOwner<AtomicWaitEntry, Sync> for SyncEntry {
+const impl StaticListOwner<AtomicWaitEntry, Sync> for SyncEntry {
     fn get() -> &'static Arc<SpinLock<Head>> {
         &SYNC_ENTRIES
     }
