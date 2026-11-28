@@ -46,6 +46,13 @@ unsafe extern "Rust" {
     fn kern_miri_jump(pc: usize, regs: *const usize, nregs: usize) -> !;
     fn kern_miri_register_irq_entry(entry: extern "Rust" fn(u8));
     fn kern_miri_wait_for_interrupt();
+    fn kern_miri_start_cpu(
+        cpu: usize,
+        entry: extern "Rust" fn(usize),
+        arg: usize,
+        stack_end: usize,
+        stack_size: usize,
+    );
 }
 
 // Same as riscv: a per-hart flag consumed on the way out of an interrupt.
@@ -226,9 +233,13 @@ const MSI: u8 = 3;
 const TIMER_INT: u8 = 7;
 
 // riscv points `mtvec` at `trap_entry`; KMiri calls the registered entry with
-// the cause of the interrupt.
+// the cause of the interrupt. Every hart runs this and natively writes the same
+// `trap_entry` into its own `mtvec`; KMiri's entry serves all CPUs and is
+// registered once, so only hart 0 registers it.
 pub(crate) fn init_vector_table() {
-    unsafe { kern_miri_register_irq_entry(irq_entry) };
+    if current_cpu_id() == 0 {
+        unsafe { kern_miri_register_irq_entry(irq_entry) };
+    }
 }
 
 // `trap_entry` and `handle_trap` for an interrupt. Taking it set MPIE = MIE,
@@ -436,16 +447,37 @@ impl Context {
 }
 
 // The interpreter enters the program at `miri_start` instead of `_start`, so
-// the bootstrap defines it and continues with `$cont` on the boot CPU. The
-// naked `_start` is kept for the symbol but never runs.
+// the bootstrap defines it and continues with `$cont`. The naked `_start` is
+// kept for the symbol but never runs.
+//
+// On qemu_riscv64 every hart leaves reset at `_start` and continues with
+// `$cont` on its own boot stack, `BOOT_STACK_SIZE` bytes below
+// `$stack_end - mhartid * BOOT_STACK_SIZE`. KMiri runs the entry on CPU 0
+// only, so CPU 0 starts the other harts there first, before it touches any
+// shared state (starting a CPU orders only what came before it).
 #[macro_export]
 macro_rules! arch_bootstrap {
     ($stack_start:path, $stack_end:path, $cont:path) => {
         #[unsafe(no_mangle)]
         fn miri_start(_argc: isize, _argv: *const *const u8) -> isize {
+            extern "Rust" fn secondary_hart(_: usize) {
+                $cont();
+            }
+            let stack_end = core::ptr::addr_of!($stack_end) as usize;
+            $crate::arch::kmiri::start_secondary_harts(stack_end, secondary_hart);
             $cont();
             0
         }
         core::arch::naked_asm!("unimp")
     };
+}
+
+/// Per-hart boot stack size, as on riscv.
+pub const BOOT_STACK_SIZE: usize = 0x1000;
+
+pub fn start_secondary_harts(stack_end: usize, entry: extern "Rust" fn(usize)) {
+    for hart in 1..NUM_CORES {
+        let top = stack_end - hart * BOOT_STACK_SIZE;
+        unsafe { kern_miri_start_cpu(hart, entry, hart, top, BOOT_STACK_SIZE) };
+    }
 }
