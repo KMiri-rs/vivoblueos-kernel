@@ -14,8 +14,6 @@
 
 #[cfg(target_arch = "aarch64")]
 pub(crate) mod gic_generic_timer;
-#[cfg(target_board = "kmiri")]
-pub(crate) mod kmiri_clock;
 #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
 pub(crate) mod riscv_clock;
 #[cfg(target_arch = "arm")]

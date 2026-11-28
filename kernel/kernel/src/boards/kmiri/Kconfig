@@ -23,3 +23,5 @@ config SOC_KMIRI
     bool "KMiri interpreter machine (riscv64)"
     default y
     select RISCV
+    select HAS_MIE
+    select HAS_MTIME
