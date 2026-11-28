@@ -19,19 +19,27 @@
 //! KMiri-rs' `blueos/kmiri.toml`).
 
 pub use crate::devices::clock::riscv_clock::QemuRiscvClock as ClockImpl;
-use crate::{arch, drivers::msip::Msip};
+use crate::{arch, drivers::msip::Msip, scheduler, support::SmpStagedInit};
 use blueos_hal::clock::Clock;
 
 pub const PHYS_DRAM_BASE: usize = 0x8000_0000;
 pub const PHYS_DRAM_SIZE: usize = 128 * 1024 * 1024;
 const NS16550_UART0_BASE: u32 = 0x1000_0000;
 
+static STAGING: SmpStagedInit = SmpStagedInit::new();
+
+// As qemu_riscv64, without the PLIC (KMiri does not model one).
 pub(crate) fn init() {
     assert!(!arch::local_irq_enabled());
-    crate::boot::init_runtime();
-    crate::boot::init_heap();
-    arch::init_vector_table();
-    ClockImpl::stop();
+    STAGING.run(0, true, crate::boot::init_runtime);
+    STAGING.run(1, true, crate::boot::init_heap);
+    STAGING.run(2, false, arch::init_vector_table);
+    STAGING.run(3, false, ClockImpl::stop);
+    // From now on, all work will be done by core 0.
+    if arch::current_cpu_id() != 0 {
+        scheduler::wait_and_then_start_schedule();
+        unreachable!("Secondary cores should have jumped to the scheduler");
+    }
 }
 
 crate::define_peripheral! {
