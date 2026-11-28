@@ -939,15 +939,107 @@ mod tests {
         assert!((a * b / c - 1.0).abs() <= epsilon);
     }
 
+    /// A kernel unit test, named like libtest names tests: the path of its
+    /// function without the crate name.
+    pub trait Testable {
+        fn run(&self);
+        fn name(&self) -> &'static str;
+    }
+
+    impl<T: Fn()> Testable for T {
+        fn run(&self) {
+            self()
+        }
+
+        fn name(&self) -> &'static str {
+            let path = core::any::type_name::<T>();
+            path.split_once("::").map_or(path, |(_krate, name)| name)
+        }
+    }
+
+    const CMDLINE_SIZE: usize = 256;
+
+    /// The tests the command line from the semihosting host selects, in the
+    /// libtest form `run_miri.py` passes (`--nocapture [FILTER]`; QEMU passes
+    /// `-semihosting-config arg=...`). The first word is the program. A test
+    /// runs if its name contains a filter (equals one with `--exact`), or if
+    /// there is no filter; `--list` prints the names and runs nothing.
+    struct Selection {
+        cmdline: [u8; CMDLINE_SIZE],
+        len: usize,
+        exact: bool,
+        list: bool,
+    }
+
+    impl Selection {
+        fn from_host() -> Self {
+            let mut selection = Self {
+                cmdline: [0; CMDLINE_SIZE],
+                len: 0,
+                exact: false,
+                list: false,
+            };
+            #[cfg(all(
+                not(use_defmt),
+                any(
+                    target_arch = "aarch64",
+                    target_arch = "arm",
+                    target_arch = "riscv32",
+                    target_arch = "riscv64"
+                )
+            ))]
+            {
+                use semihosting::sys::arm_compat::{sys_get_cmdline, CommandLine};
+                let mut cmdline = CommandLine {
+                    ptr: selection.cmdline.as_mut_ptr(),
+                    size: CMDLINE_SIZE,
+                };
+                // SAFETY: `ptr` is valid for `size` bytes.
+                if unsafe { sys_get_cmdline(&mut cmdline) }.is_ok() {
+                    selection.len = cmdline.size;
+                }
+            }
+            let exact = selection.words().any(|w| w == "--exact");
+            let list = selection.words().any(|w| w == "--list");
+            selection.exact = exact;
+            selection.list = list;
+            selection
+        }
+
+        fn words(&self) -> impl Iterator<Item = &str> {
+            core::str::from_utf8(&self.cmdline[..self.len])
+                .unwrap_or("")
+                .split_ascii_whitespace()
+                .skip(1)
+        }
+
+        fn runs(&self, name: &str) -> bool {
+            let mut filters = self.words().filter(|w| !w.starts_with('-')).peekable();
+            !self.list
+                && (filters.peek().is_none()
+                    || filters.any(|f| if self.exact { name == f } else { name.contains(f) }))
+        }
+    }
+
     #[inline(never)]
-    pub fn kernel_unittest_runner(tests: &[&dyn Fn()]) {
+    pub fn kernel_unittest_runner(tests: &[&dyn Testable]) {
         let t = scheduler::current_thread();
         #[cfg(use_defmt)]
         use defmt::println;
         #[cfg(not(use_defmt))]
         use semihosting::println;
 
-        println!("---- Running {} kernel unittests...", tests.len());
+        let selection = Selection::from_host();
+        if selection.list {
+            for test in tests {
+                println!("{}: test", test.name());
+            }
+        }
+        let selected = tests.iter().filter(|t| selection.runs(t.name())).count();
+        println!("---- Running {} kernel unittests...", selected);
+        if selected != tests.len() {
+            println!("({} filtered out)", tests.len() - selected);
+        }
         #[cfg(use_defmt)]
         println!(
             "Before test, thread 0x{:x}, rc: {}, heap status: {:?}, sp: 0x{:x}",
@@ -964,8 +1056,8 @@ mod tests {
             allocator::memory_info(),
             arch::current_sp(),
         );
-        for test in tests {
-            test();
+        for test in tests.iter().filter(|t| selection.runs(t.name())) {
+            test.run();
         }
         #[cfg(use_defmt)]
         println!(
